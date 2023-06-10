@@ -1,7 +1,7 @@
-#include "buenoOrovioModel.hpp"
+#include "CardiacElectrophysiology.hpp"
 
 void
-Heat::setup()
+BuenoOrovioModel::setup()
 {
   // Create the mesh.
   {
@@ -13,7 +13,7 @@ Heat::setup()
     grid_in.attach_triangulation(mesh_serial);
 
     const std::string mesh_file_name =
-      "../mesh/mesh-cube-" + std::to_string(N + 1) + ".msh";
+      //"../mesh/mesh-cube-" + std::to_string(N + 1) + ".msh";
 
     std::ifstream grid_in_file(mesh_file_name);
     grid_in.read_msh(grid_in_file);
@@ -84,11 +84,15 @@ Heat::setup()
     pcout << "  Initializing the solution vector" << std::endl;
     solution_owned.reinit(locally_owned_dofs, MPI_COMM_WORLD);
     solution.reinit(locally_owned_dofs, locally_relevant_dofs, MPI_COMM_WORLD);
+
+    pcout << "  Initializing the gating variables vector" << std::endl;
+    gating_vector = Vector<double> (dim_gating); // do we need this? init the vector with the correct dimensions....
+    // Or setting it equal to initial conditions (see solve method) is enough?
   }
 }
 
 void
-Heat::assemble_matrices()
+BuenoOrovioModel::assemble_matrices()
 {
   pcout << "===============================================" << std::endl;
   pcout << "Assembling the system matrices" << std::endl;
@@ -130,7 +134,7 @@ Heat::assemble_matrices()
                 {
                   cell_mass_matrix(i, j) += fe_values.shape_value(i, q) *
                                             fe_values.shape_value(j, q) /
-                                            deltat * fe_values.JxW(q);
+                                            deltat * fe_values.JxW(q);    // mass_matrix/deltat!
 
                   cell_stiffness_matrix(i, j) +=
                     mu_loc * fe_values.shape_grad(i, q) *
@@ -148,20 +152,24 @@ Heat::assemble_matrices()
   mass_matrix.compress(VectorOperation::add);
   stiffness_matrix.compress(VectorOperation::add);
 
-  // We build the matrix on the left-hand side of the algebraic problem (the one
-  // that we'll invert at each timestep).
+  // We build the matrix on the left-hand side of the algebraic problem: later 
+  // (in assemble_lhs) we will add also the J_ion_lin (derivative of Jion that
+  // linearly depends on u) contribution.
+  // LHS:
+  //      (mass_matrix/tau + stifness_matrix + J_ion_lin(u_n, z_n+1)) * u_n+1
   lhs_matrix.copy_from(mass_matrix);
-  lhs_matrix.add(1, stiffness_matrix); // TODO 1 necessario?
-  // Jion
+  lhs_matrix.add(1, stiffness_matrix); // constant 1 needed
 
   // We build the matrix on the right-hand side (the one that multiplies the old
-  // solution un).
+  // solution u_n).
+  // RHS:
+  //      mass_matrix/tau - J_ion_nonlin(u_n, z_n+1) + J_app(t_n+1)
   rhs_matrix.copy_from(mass_matrix);
-  // rhs_matrix.add(-(1.0 - theta), stiffness_matrix);
+
 }
 
 void
-Heat::assemble_lhs(const double &time)
+BuenoOrovioModel::assemble_lhs(const double &time)
 {
     const unsigned int dofs_per_cell = fe->dofs_per_cell;
   const unsigned int n_q           = quadrature->size();
@@ -188,11 +196,10 @@ Heat::assemble_lhs(const double &time)
 
       for (unsigned int q = 0; q < n_q; ++q)
         {
-          // We need to compute the forcing term at the current time (tn+1) and
-          // at the old time (tn). deal.II Functions can be computed at a
-          // specific time by calling their set_time method.
+          // Here we compute the contribution of the derivative of J_ion 
+          // (the one that linearly depends on u) at the previous timestep t_n.
 
-          // Compute J(un)
+          // Compute J(u_n)
         //   forcing_term.set_time(time - deltat);
         //   const double f_old_loc =
         //     forcing_term.value(fe_values.quadrature_point(q));
@@ -217,7 +224,7 @@ Heat::assemble_lhs(const double &time)
 }
 
 void
-Heat::assemble_rhs(const double &time)
+BuenoOrovioModel::assemble_rhs(const double &time)
 {
   const unsigned int dofs_per_cell = fe->dofs_per_cell;
   const unsigned int n_q           = quadrature->size();
@@ -244,16 +251,16 @@ Heat::assemble_rhs(const double &time)
 
       for (unsigned int q = 0; q < n_q; ++q)
         {
-          // We need to compute the forcing term at the current time (tn+1) and
-          // at the old time (tn). deal.II Functions can be computed at a
-          // specific time by calling their set_time method.
+          // Here we compute the non-linear contribution of the derivative 
+          // of J_ion at the previous timestep t_n, as well as the contribution
+          // of the forcing term (applied current).
 
-          // Compute Japp(un+1)
+          // Compute Japp(u_n+1)
         //   forcing_term.set_time(time);
         //   const double f_new_loc =
         //     forcing_term.value(fe_values.quadrature_point(q));
 
-          // Compute Jnonlin(un)
+          // Compute Jnonlin(u_n)
         //   forcing_term.set_time(time - deltat);
         //   const double f_old_loc =
         //     forcing_term.value(fe_values.quadrature_point(q));
@@ -276,7 +283,7 @@ Heat::assemble_rhs(const double &time)
 }
 
 void
-Heat::solve_time_step()
+BuenoOrovioModel::solve_time_step()
 {
   SolverControl solver_control(1000, 1e-6 * system_rhs.l2_norm());
 
@@ -293,7 +300,7 @@ Heat::solve_time_step()
 }
 
 void
-Heat::output(const unsigned int &time_step, const double &time) const
+BuenoOrovioModel::output(const unsigned int &time_step, const double &time) const
 {
   DataOut<dim> data_out;
   data_out.add_data_vector(dof_handler, solution, "u");
@@ -326,8 +333,27 @@ Heat::output(const unsigned int &time_step, const double &time) const
                            MPI_COMM_WORLD);
 }
 
+void BuenoOrovioModel::solve_gating_system()
+{
+  // We create a custom vectorial function in the hpp file (FunctionGatingSys -> gating_sys)
+  // and we only call its method solve.
+  // In this case we can avoid creating the dedicated method solve_gating_system()...
+  gating_system.solve(gating_vector)
+
+  // If we want a (simpler(?)) alternative:
+  // Compute v.
+  gating_vector[0] = /* equation for v, depends on the old value gating_vector[0] */;
+
+  // Compute w.
+  gating_vector[1] = /* equation for w, depends on the old value gating_vector[1] */;
+
+  // Compute s.
+  gating_vector[2] = /* equation for s, depends on the old value gating_vector[2] */;
+
+}
+
 void
-Heat::solve()
+BuenoOrovioModel::solve()
 {
   assemble_matrices();
 
@@ -337,13 +363,13 @@ Heat::solve()
 
   // Apply the initial condition.
   {
-    pcout << "Applying the initial condition" << std::endl;
+    pcout << "Applying the initial condition for diffusion problem" << std::endl;
 
     VectorTools::interpolate(dof_handler, u0, solution_owned);
     solution = solution_owned;
 
-    // gating variables
-    // TODO
+    pcout << "Applying the initial condition for gating problem" << std::endl;
+    gating_vector = z0;
 
     // Output the initial solution.
     output(0, 0.0);
@@ -360,8 +386,7 @@ Heat::solve()
       pcout << "n = " << std::setw(3) << time_step << ", t = " << std::setw(5)
             << time << ":" << std::flush;
 
-      // solve z system
-      // TODO
+      solve_gating_system();
 
       assemble_rhs(time);
       assemble_lhs(time);
