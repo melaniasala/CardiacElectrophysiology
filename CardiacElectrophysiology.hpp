@@ -24,19 +24,21 @@
 
 #include <fstream>
 #include <iostream>
+#include <string>
 
 using namespace dealii;
 
-#define H(x,x0) x>x0
-
+#define H(x, x0) x > x0
 
 // Class representing the Bueno-Orovio model of the heart
-class BuenoOrovio
+class BuenoOrovioModel
 {
 public:
-    // Physical dimension (1D, 2D, 3D)
+    // Physical dimension of diffusion problem (3D)
     static constexpr unsigned int dim = 3;
 
+    // Physical dimension of the gating problem (ODE)(3D). (v, w, s)
+    static constexpr unsigned int dim_gating = 3;
 
     // Functions. ///////////////////////////////////////////////////////////////
 
@@ -59,7 +61,7 @@ public:
         {
             u(p);
             return std::sin(5 * M_PI * get_time()) * std::sin(2 * M_PI * p[0]) *
-                    std::sin(3 * M_PI * p[0]) * std::sin(4 * M_PI * p[2]);
+                   std::sin(3 * M_PI * p[0]) * std::sin(4 * M_PI * p[2]);
         }
 
         // virtual Tensor<1, dim>
@@ -95,65 +97,61 @@ public:
         value(const Point<dim> &p,
               const unsigned int /*component*/ = 0) const override
         {
-            return 0; // get_time();    
+            return 0; // get_time();
         }
     };
 
-    // Functions for the initial conditions
+    // Function for the initial condition of u.
     class FunctionU0 : public Function<dim>
     {
     public:
         virtual double
         value(const Point<dim> &p,
-            const unsigned int /*component*/ = 0) const override
+              const unsigned int /*component*/ = 0) const override
         {
-        return 0;
+            return 0;
         }
     };
 
-    class FunctionV0 : public Function<dim>
+    // Vector for initial condition of gating variables.
+    class GatingVct0 : public Vector<double>
     {
     public:
-        virtual double
-        value(const Point<dim> &p,
-            const unsigned int /*component*/ = 0) const override
+        GatingVct0() : Vector<double>(3)
         {
-        return 1;
+            (*this)[0] = 1.0; // v
+            (*this)[1] = 1.0; // w
+            (*this)[2] = 0.0; // s
         }
-    };
+    }
 
-    class FunctionW0 : public Function<dim>
+    // Vector valued function corresponding to the gating variable system.
+    class GatingSystem
     {
     public:
-        virtual double
-        value(const Point<dim> &p,
-            const unsigned int /*component*/ = 0) const override
+        // This method compute the values of the gating variables, taking as
+        // input the reference to the gating variables' vector and overwriting it.
+        void
+        solve(Vector<double> &z) const
         {
-        return 1;
+            z[0] = /* equation for v, depends on the old value z[0] and on u_old (solution_owned or solution?)*/;
+            z[1] = /* equation for w, depends on the old value z[1] and on u_old (solution_owned or solution?)*/;
+            z[2] = /* equation for s, depends on the old value z[2] and on u_old (solution_owned or solution?)*/;
         }
-    };
 
-    class FunctionS0 : public Function<dim>
-    {
-    public:
-        virtual double
-        value(const Point<dim> &p,
-            const unsigned int /*component*/ = 0) const override
-        {
-        return 0;
-        }
+    protected:
+        // here some constant for computing the system (if needed)
     };
 
     // Constructor. We provide the final time, time step Delta t and theta method
     // parameter as constructor arguments.
     BuenoOrovio(const unsigned int &N_,
-         const unsigned int &r_,
-         const double &T_,
-         const double &deltat_
-         // add tissue choice
-         )
-        : mpi_size(Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD)), mpi_rank(Utilities::MPI::this_mpi_process(MPI_COMM_WORLD)), pcout(std::cout, mpi_rank == 0), T(T_), N(N_), r(r_), deltat(deltat_), mesh(MPI_COMM_WORLD)
-    {}
+                const unsigned int &r_,
+                const double &T_,
+                const double &deltat_ const std::string &tissue_type_)
+        : mpi_size(Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD)), mpi_rank(Utilities::MPI::this_mpi_process(MPI_COMM_WORLD)), pcout(std::cout, mpi_rank == 0), T(T_), N(N_), r(r_), deltat(deltat_), tissue_type(parse_tissue_type(tissue_type_)), mesh(MPI_COMM_WORLD)
+    {
+    }
 
     // Initialization.
     void setup();
@@ -161,12 +159,10 @@ public:
     // Solve the problem.
     void solve();
 
-    
-
 protected:
-
     // Model's parameters: //////////////
-    struct TissueParameters { 
+    struct TissueParameters
+    {
         double u_0;
         double u_u;
         double theta_v;
@@ -197,8 +193,7 @@ protected:
         double w_inf_star;
     };
 
-
-    constexpr TissueParameters Epicardium {
+    constexpr TissueParameters Epicardium{
         .u_0 = 0.0,
         .u_u = 1.55,
         .theta_v = 0.3,
@@ -226,9 +221,8 @@ protected:
         .u_s = 0.9087,
         .tau_si = 1.8875e-3,
         .tau_w_inf = 0.07,
-        .w_inf_star = 0.94
-    };
-    constexpr TissueParameters Endocardium {
+        .w_inf_star = 0.94};
+    constexpr TissueParameters Endocardium{
         .u_0 = 0.0,
         .u_u = 1.56,
         .theta_v = 0.3,
@@ -256,9 +250,9 @@ protected:
         .u_s = 0.9087,
         .tau_si = 2.9013e-3,
         .tau_w_inf = 0.0273,
-        .w_inf_star = 0.78
-    };
-    constexpr TissueParameters Myocardium {
+        .w_inf_star = 0.78};
+        
+    constexpr TissueParameters Myocardium{
         .u_0 = 0.0,
         .u_u = 1.61,
         .theta_v = 0.3,
@@ -286,11 +280,30 @@ protected:
         .u_s = 0.9087,
         .tau_si = 3.3849e-3,
         .tau_w_inf = 0.01,
-        .w_inf_star = 0.5
-    };
+        .w_inf_star = 0.5};
 
     static constexpr double D = 1.171 //+-0.221
-    
+
+        // Tissue type.
+        enum class TissueType {
+            Epicardium,
+            Endocardium,
+            Myocardium
+        };
+
+    TissueType parse_tissue_type(const std::string &tissue_type) const
+    {
+        if (tissue_type == "epicardium")
+            return TissueType::Epicardium;
+        else if (tissue_type == "endocardium")
+            return TissueType::Endocardium;
+        else if (tissue_type == "myocardium")
+            return TissueType::Myocardium;
+        else
+            throw std::runtime_error("Unknown tissue type: " + tissue_type);
+    }
+
+    // Still have to set the parameters accordingly...
 
     // FE methods: //////////////////////
 
@@ -325,11 +338,12 @@ protected:
     // Forcing term.
     ForcingTerm forcing_term;
 
-    // initial conditions
-    FunctionU0 u0; 
-    FunctionW0 w0;
-    FunctionV0 v0;
-    FunctionS0 s0;
+    // Initial conditions.
+    FunctionU0 u0;
+    GatingVct0 z0;
+
+    // Gating variables system.
+    GatingSystem gating_system;
 
     // Exact solution.
     ExactSolution exact_solution;
@@ -389,4 +403,7 @@ protected:
 
     // System solution (including ghost elements).
     TrilinosWrappers::MPI::Vector solution;
+
+    // Gating variables vector.
+    Vector<double> gating_vector;
 };
