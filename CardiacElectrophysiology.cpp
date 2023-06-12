@@ -12,6 +12,7 @@ BuenoOrovioModel::setup()
     GridIn<dim> grid_in;
     grid_in.attach_triangulation(mesh_serial);
 
+    // TODO: genetate mesh
     const std::string mesh_file_name =
       //"../mesh/mesh-cube-" + std::to_string(N + 1) + ".msh";
 
@@ -139,6 +140,8 @@ BuenoOrovioModel::assemble_matrices()
                   cell_stiffness_matrix(i, j) +=
                     mu_loc * fe_values.shape_grad(i, q) *
                     fe_values.shape_grad(j, q) * fe_values.JxW(q);
+
+                  cell_ion(i,j) +=
                 }
             }
         }
@@ -156,20 +159,20 @@ BuenoOrovioModel::assemble_matrices()
   // (in assemble_lhs) we will add also the J_ion_lin (derivative of Jion that
   // linearly depends on u) contribution.
   // LHS:
-  //      (mass_matrix/tau + stifness_matrix + J_ion_lin(u_n, z_n+1)) * u_n+1
+  //      (mass_matrix/tau + stifness_matrix) * u_n+1
   lhs_matrix.copy_from(mass_matrix);
   lhs_matrix.add(1, stiffness_matrix); // constant 1 needed
 
   // We build the matrix on the right-hand side (the one that multiplies the old
   // solution u_n).
   // RHS:
-  //      mass_matrix/tau - J_ion_nonlin(u_n, z_n+1) + J_app(t_n+1)
+  //      mass_matrix/tau * u_n - J_ion(u_n, z_n+1) + J_app(t_n+1)
   rhs_matrix.copy_from(mass_matrix);
 
 }
 
 void
-BuenoOrovioModel::assemble_lhs(const double &time)
+BuenoOrovioModel::assemble_lhs(const double &time) // NOT NEEDED
 {
     const unsigned int dofs_per_cell = fe->dofs_per_cell;
   const unsigned int n_q           = quadrature->size();
@@ -240,6 +243,12 @@ BuenoOrovioModel::assemble_rhs(const double &time)
 
   system_rhs = 0.0;
 
+  // From lab06, HeatNonLinear
+  // Value of the solution (u_n) and of the ionics (z_n, z_n+1) on current cell.
+  std::vector<double>         solution_old_loc(n_q);  // u_n
+  std::vector<double>         ionic_old_loc(n_q);     // z_n
+  std::vector<double>         ionic_loc(n_q);         // z_n+1
+
   for (const auto &cell : dof_handler.active_cell_iterators())
     {
       if (!cell->is_locally_owned())
@@ -249,26 +258,29 @@ BuenoOrovioModel::assemble_rhs(const double &time)
 
       cell_rhs = 0.0;
 
+      // From lab06, HeatNonLinear
+      fe_values.get_function_values(solution, solution_old_loc);
+      // same for z?
+
       for (unsigned int q = 0; q < n_q; ++q)
         {
-          // Here we compute the non-linear contribution of the derivative 
-          // of J_ion at the previous timestep t_n, as well as the contribution
+          // Here we compute the non-linear contribution of  
+          // of J_ion(u_n, z_n+1) as well as the contribution
           // of the forcing term (applied current).
+
+          // see LAB06 for solution_loc (HeatNonLinear)
+          // Compute ionic variables (depends on solution_old_loc[q] ->u_n and on ionic_old_loc[q] -> z_n at prev step)
+
+          // Compute Jion(u_n) (depends on ionic variables, and on solution_loc[q] -> u_n)
 
           // Compute Japp(u_n+1)
         //   forcing_term.set_time(time);
-        //   const double f_new_loc =
-        //     forcing_term.value(fe_values.quadrature_point(q));
-
-          // Compute Jnonlin(u_n)
-        //   forcing_term.set_time(time - deltat);
-        //   const double f_old_loc =
+        //   const double f_loc =
         //     forcing_term.value(fe_values.quadrature_point(q));
 
           for (unsigned int i = 0; i < dofs_per_cell; ++i)
             {
-            //   cell_rhs(i) += (theta * f_new_loc + (1.0 - theta) * f_old_loc) *
-            //                  fe_values.shape_value(i, q) * fe_values.JxW(q);
+            //   cell_rhs(i) += (-J_ion + J_app) * fe_values.shape_value(i, q) * fe_values.JxW(q); (???)
             }
         }
 
@@ -292,7 +304,7 @@ BuenoOrovioModel::solve_time_step()
   preconditioner.initialize(
     lhs_matrix, TrilinosWrappers::PreconditionSSOR::AdditionalData(1.0));
 
-  solver.solve(system_lhs, solution_owned, system_rhs, preconditioner);
+  solver.solve(system_lhs /* forse qui ci va matrix_lhs*/, solution_owned, system_rhs, preconditioner);
   pcout << "   " << solver_control.last_step() << " GMRES iterations"
         << std::endl;
 
@@ -302,6 +314,7 @@ BuenoOrovioModel::solve_time_step()
 void
 BuenoOrovioModel::output(const unsigned int &time_step, const double &time) const
 {
+  // ToDo: output ionic?
   DataOut<dim> data_out;
   data_out.add_data_vector(dof_handler, solution, "u");
 
@@ -333,7 +346,7 @@ BuenoOrovioModel::output(const unsigned int &time_step, const double &time) cons
                            MPI_COMM_WORLD);
 }
 
-void BuenoOrovioModel::solve_gating_system()
+void BuenoOrovioModel::solve_gating_system() // NOT NEEDED
 {
   // We create a custom vectorial function in the hpp file (FunctionGatingSys -> gating_sys)
   // and we only call its method solve.
@@ -386,10 +399,10 @@ BuenoOrovioModel::solve()
       pcout << "n = " << std::setw(3) << time_step << ", t = " << std::setw(5)
             << time << ":" << std::flush;
 
-      solve_gating_system();
+      // solve_gating_system();
 
       assemble_rhs(time);
-      assemble_lhs(time);
+      // assemble_lhs(time);
       solve_time_step();
       output(time_step, time);
     }

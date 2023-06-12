@@ -38,7 +38,7 @@ public:
     static constexpr unsigned int dim = 3;
 
     // Physical dimension of the gating problem (ODE)(3D). (v, w, s)
-    static constexpr unsigned int dim_gating = 3;
+    static constexpr unsigned int dim_ionic = 3;
 
     // Functions. ///////////////////////////////////////////////////////////////
 
@@ -113,11 +113,11 @@ public:
         }
     };
 
-    // Vector for initial condition of gating variables.
+    // Vector for initial condition of gating variables. // NOT NEEDED (?), everything is in IonicSys
     class GatingVct0 : public Vector<double>
     {
     public:
-        GatingVct0() : Vector<double>(3)
+        GatingVct0() : Vector<double>(dim_ionic)
         {
             (*this)[0] = 1.0; // v
             (*this)[1] = 1.0; // w
@@ -126,21 +126,27 @@ public:
     }
 
     // Vector valued function corresponding to the gating variable system.
-    class GatingSystem
+    class IonicSystem
     {
     public:
-        // This method compute the values of the gating variables, taking as
+        // Constructor that set the value of z to initial condition (Andre)
+
+
+        // This method compute the values of the ionic variables for the current quadrature node, taking as
         // input the reference to the gating variables' vector and overwriting it.
+        // It also takes as input the value of the solution u at the previous timestep,
+        // at the current quadrature node.
         void
-        solve(Vector<double> &z) const
+        update(Vector<double> &z, const std::vector<double> &u) const
         {
-            z[0] = /* equation for v, depends on the old value z[0] and on u_old (solution_owned or solution?)*/;
-            z[1] = /* equation for w, depends on the old value z[1] and on u_old (solution_owned or solution?)*/;
-            z[2] = /* equation for s, depends on the old value z[2] and on u_old (solution_owned or solution?)*/;
+            z[0] = /* equation for v, depends on the old value z[0] and on u_old */;
+            z[1] = /* equation for w, depends on the old value z[1] and on u_old */;
+            z[2] = /* equation for s, depends on the old value z[2] and on u_old */;
         }
 
     protected:
         // here some constant for computing the system (if needed)
+        z = // to be modified (Andre)
     };
 
     // Constructor. We provide the final time, time step Delta t and theta method
@@ -293,6 +299,7 @@ protected:
 
     TissueType parse_tissue_type(const std::string &tissue_type) const
     {
+        // to lowcase (Andre)
         if (tissue_type == "epicardium")
             return TissueType::Epicardium;
         else if (tissue_type == "endocardium")
@@ -340,10 +347,10 @@ protected:
 
     // Initial conditions.
     FunctionU0 u0;
-    GatingVct0 z0;
+    IonicVct0 z0;
 
     // Gating variables system.
-    GatingSystem gating_system;
+    IonicSystem ionic_system;
 
     // Exact solution.
     ExactSolution exact_solution;
@@ -405,5 +412,5 @@ protected:
     TrilinosWrappers::MPI::Vector solution;
 
     // Gating variables vector.
-    Vector<double> gating_vector;
+    Vector<double> ionic_vector;
 };
