@@ -140,8 +140,6 @@ BuenoOrovioModel::assemble_matrices()
                   cell_stiffness_matrix(i, j) +=
                     mu_loc * fe_values.shape_grad(i, q) *
                     fe_values.shape_grad(j, q) * fe_values.JxW(q);
-
-                  cell_ion(i,j) +=
                 }
             }
         }
