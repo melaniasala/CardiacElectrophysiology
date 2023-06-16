@@ -86,7 +86,9 @@ BuenoOrovioModel::setup()
     solution_owned.reinit(locally_owned_dofs, MPI_COMM_WORLD);
     solution.reinit(locally_owned_dofs, locally_relevant_dofs, MPI_COMM_WORLD);
 
-    pcout << "  Initializing the gating variables vector" << std::endl;
+    pcout << "  Initializing the ionic variables vector" << std::endl;
+    // z_owned.reinit(locally_owned_dofs, MPI_COMM_WORLD);
+    // z.reinit(locally_owned_dofs, locally_relevant_dofs, MPI_COMM_WORLD);
     gating_vector = Vector<double> (dim_gating); // do we need this? init the vector with the correct dimensions....
     // Or setting it equal to initial conditions (see solve method) is enough?
   }
@@ -170,61 +172,6 @@ BuenoOrovioModel::assemble_matrices()
 }
 
 void
-BuenoOrovioModel::assemble_lhs(const double &time) // NOT NEEDED
-{
-    const unsigned int dofs_per_cell = fe->dofs_per_cell;
-  const unsigned int n_q           = quadrature->size();
-
-  FEValues<dim> fe_values(*fe,
-                          *quadrature,
-                          update_values | update_quadrature_points |
-                            update_JxW_values);
-
-  Vector<double> cell_rhs(dofs_per_cell);
-
-  std::vector<types::global_dof_index> dof_indices(dofs_per_cell);
-
-  system_lhs = 0.0;
-
-  for (const auto &cell : dof_handler.active_cell_iterators())
-    {
-      if (!cell->is_locally_owned())
-        continue;
-
-      fe_values.reinit(cell);
-
-      cell_rhs = 0.0;
-
-      for (unsigned int q = 0; q < n_q; ++q)
-        {
-          // Here we compute the contribution of the derivative of J_ion 
-          // (the one that linearly depends on u) at the previous timestep t_n.
-
-          // Compute J(u_n)
-        //   forcing_term.set_time(time - deltat);
-        //   const double f_old_loc =
-        //     forcing_term.value(fe_values.quadrature_point(q));
-
-        //   for (unsigned int i = 0; i < dofs_per_cell; ++i)
-        //     {
-        //       cell_rhs(i) += (theta * f_new_loc + (1.0 - theta) * f_old_loc) *
-        //                      fe_values.shape_value(i, q) * fe_values.JxW(q);
-        //     }
-        }
-
-      cell->get_dof_indices(dof_indices);
-      system_lhs.add(dof_indices, cell_rhs);
-
-    }
-
-  system_lhs.compress(VectorOperation::add);
-
-  // Add the term that comes from the old solution.
-  // rhs_matrix.vmult_add(system_rhs, solution_owned);
-  system_lhs.add(1, rhs_matrix);
-}
-
-void
 BuenoOrovioModel::assemble_rhs(const double &time)
 {
   const unsigned int dofs_per_cell = fe->dofs_per_cell;
@@ -241,7 +188,7 @@ BuenoOrovioModel::assemble_rhs(const double &time)
 
   system_rhs = 0.0;
 
-  // From lab06, HeatNonLinear
+  // From lab08, HeatNonLinear
   // Value of the solution (u_n) and of the ionics (z_n, z_n+1) on current cell.
   std::vector<double>         solution_old_loc(n_q);  // u_n
   std::vector<double>         ionic_old_loc(n_q);     // z_n
@@ -257,8 +204,8 @@ BuenoOrovioModel::assemble_rhs(const double &time)
       cell_rhs = 0.0;
 
       // From lab06, HeatNonLinear
-      fe_values.get_function_values(solution, solution_old_loc);
-      // same for z?
+      fe_values.get_function_values(solution, solution_old_loc); // get the value of the old solution in each quadrature nodes for the current cell
+      fe_values.get_function_values(z /* to be inserted in hpp*/, ionic_old_loc);
 
       for (unsigned int q = 0; q < n_q; ++q)
         {
@@ -266,15 +213,18 @@ BuenoOrovioModel::assemble_rhs(const double &time)
           // of J_ion(u_n, z_n+1) as well as the contribution
           // of the forcing term (applied current).
 
-          // see LAB06 for solution_loc (HeatNonLinear)
+          // see LAB08 for solution_loc (HeatNonLinear)
           // Compute ionic variables (depends on solution_old_loc[q] ->u_n and on ionic_old_loc[q] -> z_n at prev step)
+          // TODO ionic_loc
+          // NON QUI, CREIAMO UN METODO CHE AGGIORNI LE IONIC VAR RISOLVENDO UN SISTEMA LINEARE, IN QUESTO MODO 
+          // Z SI COMPORTA ESATTAMENTE COME U
 
           // Compute Jion(u_n) (depends on ionic variables, and on solution_loc[q] -> u_n)
+           const double j_ion_loc = j_ion.value(ionic_loc[q] /* z_n+1 */, solution_old_loc[q] /* u_n */); // da controllare!!
 
           // Compute Japp(u_n+1)
-        //   forcing_term.set_time(time);
-        //   const double f_loc =
-        //     forcing_term.value(fe_values.quadrature_point(q));
+            forcing_term.set_time(time);
+            const double f_loc = forcing_term.value(fe_values.quadrature_point(q));
 
           for (unsigned int i = 0; i < dofs_per_cell; ++i)
             {
@@ -302,7 +252,7 @@ BuenoOrovioModel::solve_time_step()
   preconditioner.initialize(
     lhs_matrix, TrilinosWrappers::PreconditionSSOR::AdditionalData(1.0));
 
-  solver.solve(system_lhs /* forse qui ci va matrix_lhs*/, solution_owned, system_rhs, preconditioner);
+  solver.solve(matrix_lhs, solution_owned, system_rhs, preconditioner);
   pcout << "   " << solver_control.last_step() << " GMRES iterations"
         << std::endl;
 
@@ -397,10 +347,7 @@ BuenoOrovioModel::solve()
       pcout << "n = " << std::setw(3) << time_step << ", t = " << std::setw(5)
             << time << ":" << std::flush;
 
-      // solve_gating_system();
-
       assemble_rhs(time);
-      // assemble_lhs(time);
       solve_time_step();
       output(time_step, time);
     }

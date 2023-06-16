@@ -97,8 +97,9 @@ public:
         value(const Point<dim> &p,
               const unsigned int /*component*/ = 0) const override
         {
-            return 0; // get_time();
+            //TODO // get_time();
         }
+        // TODO
     };
 
     // Function for the initial condition of u.
@@ -137,7 +138,7 @@ public:
         // It also takes as input the value of the solution u at the previous timestep,
         // at the current quadrature node.
         void
-        update(Vector<double> &z, const std::vector<double> &u) const
+        update(Vector<double> &z_old, const std::vector<double> &u) const
         {
             z[0] = /* equation for v, depends on the old value z[0] and on u_old */;
             z[1] = /* equation for w, depends on the old value z[1] and on u_old */;
@@ -149,12 +150,23 @@ public:
         z = // to be modified (Andre)
     };
 
+    class FunctionJion
+    {
+    public:
+        virtual double
+        value(const Vector<double> &z, const double &u_old) const
+        {
+            // expression of J_ion
+        }
+    };
+
     // Constructor. We provide the final time, time step Delta t and theta method
     // parameter as constructor arguments.
     BuenoOrovio(const unsigned int &N_,
                 const unsigned int &r_,
                 const double &T_,
-                const double &deltat_ const std::string &tissue_type_)
+                const double &deltat_,
+                const std::string &tissue_type_)
         : mpi_size(Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD)), mpi_rank(Utilities::MPI::this_mpi_process(MPI_COMM_WORLD)), pcout(std::cout, mpi_rank == 0), T(T_), N(N_), r(r_), deltat(deltat_), tissue_type(parse_tissue_type(tissue_type_)), mesh(MPI_COMM_WORLD)
     {
     }
