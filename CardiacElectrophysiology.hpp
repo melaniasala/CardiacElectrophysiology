@@ -25,6 +25,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <cmath>
 
 using namespace dealii;
 
@@ -37,7 +38,7 @@ public:
     // Physical dimension of diffusion problem (3D)
     static constexpr unsigned int dim = 3;
 
-    // Physical dimension of the gating problem (ODE)(3D). (v, w, s)
+    // Physical dimension of the ionic problem (ODE)(3D). (v, w, s)
     static constexpr unsigned int dim_ionic = 3;
 
     // Functions. ///////////////////////////////////////////////////////////////
@@ -130,24 +131,26 @@ public:
     class IonicSystem
     {
     public:
-        // Constructor that set the value of z to initial condition (Andre)
-
-
         // This method compute the values of the ionic variables for the current quadrature node, taking as
-        // input the reference to the gating variables' vector and overwriting it.
-        // It also takes as input the value of the solution u at the previous timestep,
+        // input the reference to the gating variables' vector the value of the solution u at the previous timestep,
         // at the current quadrature node.
+        // It updates z_new with the computed values.
         void
-        update(Vector<double> &z_old, const std::vector<double> &u) const
+        value(const std::vector<double> &z_old, const double &u, std::vector<double> &z_new) const
         {
-            z[0] = /* equation for v, depends on the old value z[0] and on u_old */;
-            z[1] = /* equation for w, depends on the old value z[1] and on u_old */;
-            z[2] = /* equation for s, depends on the old value z[2] and on u_old */;
+            z_new[0] = (z_old[0] * tau_v_min + (1 - H(u - theta_v)) * deltat * v_inf) 
+                        * tau_v_plus 
+                        / (tau_v_min * tau_v_plus + deltat * tau_v_plus + H(u - theta_v) * deltat * (tau_v_min - tau_v_plus));
+            z_new[1] = (z_old[1] * tau_w_min + (1 - H(u - theta_w)) * deltat * w_inf) 
+                        * tau_w_plus 
+                        / (tau_w_min * tau_w_plus + deltat * tau_w_plus + H(u - theta_w) * deltat * (tau_w_min - tau_w_plus));
+            z_new[2] = (z_old[2] * tau_s + 1 + std::tanh(k_s * (u - u_s))) 
+                        / (2 * (tau_s + 1))
         }
 
     protected:
         // here some constant for computing the system (if needed)
-        z = // to be modified (Andre)
+        // maybe the H??
     };
 
     class FunctionJion
@@ -423,6 +426,9 @@ protected:
     // System solution (including ghost elements).
     TrilinosWrappers::MPI::Vector solution;
 
-    // Gating variables vector.
-    Vector<double> ionic_vector;
+    // Ionic variables at the previous timestep.
+    TrilinosWrappers::MPI::Vector ionics_old;
+
+    // Ionic variables at the current timestep.
+    TrilinosWrappers::MPI::Vector ionics;
 };

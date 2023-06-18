@@ -36,6 +36,9 @@ BuenoOrovioModel::setup()
 
     fe = std::make_unique<FE_SimplexP<dim>>(r);
 
+    FE_SimplexP<dim> fe_scalar(r);
+    fe_ionic = std::make_unique<FESystem<dim>>(fe_scalar, dim_ionic);
+
     pcout << "  Degree                     = " << fe->degree << std::endl;
     pcout << "  DoFs per cell              = " << fe->dofs_per_cell
           << std::endl;
@@ -87,10 +90,9 @@ BuenoOrovioModel::setup()
     solution.reinit(locally_owned_dofs, locally_relevant_dofs, MPI_COMM_WORLD);
 
     pcout << "  Initializing the ionic variables vector" << std::endl;
+    // TODO initialize, with the correct dofs from the correct fespace
     // z_owned.reinit(locally_owned_dofs, MPI_COMM_WORLD);
     // z.reinit(locally_owned_dofs, locally_relevant_dofs, MPI_COMM_WORLD);
-    gating_vector = Vector<double> (dim_gating); // do we need this? init the vector with the correct dimensions....
-    // Or setting it equal to initial conditions (see solve method) is enough?
   }
 }
 
@@ -182,17 +184,28 @@ BuenoOrovioModel::assemble_rhs(const double &time)
                           update_values | update_quadrature_points |
                             update_JxW_values);
 
+  // Since the ionic problem is vectorial and not scalar as the one 
+  // for the potential we need different fe_values  
+  FEValues<dim> fe_values_ionic(*fe_ionic,
+                          *quadrature,
+                          update_values | update_quadrature_points |
+                            update_JxW_values);
+
+  FEEvaluation<dim> fe_evaluation_ionic(*fe_ionic,
+                          *quadrature,
+                          update_values | update_quadrature_points |
+                            update_JxW_values);
+
   Vector<double> cell_rhs(dofs_per_cell);
 
   std::vector<types::global_dof_index> dof_indices(dofs_per_cell);
 
   system_rhs = 0.0;
 
-  // From lab08, HeatNonLinear
   // Value of the solution (u_n) and of the ionics (z_n, z_n+1) on current cell.
-  std::vector<double>         solution_old_loc(n_q);  // u_n
-  std::vector<double>         ionic_old_loc(n_q);     // z_n
-  std::vector<double>         ionic_loc(n_q);         // z_n+1
+  std::vector<double>                      solution_old_loc(n_q); // u_n
+  std::vector<std::vector<double>>         ionics_old_loc(n_q, std::vector<double>(dim_ionic));  // z_n
+  std::vector<std::vector<double>>         ionics_loc(n_q, std::vector<double>(dim_ionic));   // z_n+1
 
   for (const auto &cell : dof_handler.active_cell_iterators())
     {
@@ -200,12 +213,17 @@ BuenoOrovioModel::assemble_rhs(const double &time)
         continue;
 
       fe_values.reinit(cell);
+      fe_values_ionic.reinit(cell);
+      fe_evaluation_ionic.reinit(cell);
 
       cell_rhs = 0.0;
 
-      // From lab06, HeatNonLinear
-      fe_values.get_function_values(solution, solution_old_loc); // get the value of the old solution in each quadrature nodes for the current cell
-      fe_values.get_function_values(z /* to be inserted in hpp*/, ionic_old_loc);
+      // Get the value of the solution and the ionic variables at the previous timestep,
+      // in each quadrature node, for the current cell.
+      fe_values.get_function_values(solution, solution_old_loc);
+      fe_values_ionic.get_function_values(ionics_old, ionics_old_loc); 
+      // terrei z e z_old separate, magari aggiornando z sulla cella corrente modifico valori che potrebbero servire a un'altra cella
+      // sarà necessario implementare un aggiornamento z_old = z
 
       for (unsigned int q = 0; q < n_q; ++q)
         {
@@ -213,14 +231,13 @@ BuenoOrovioModel::assemble_rhs(const double &time)
           // of J_ion(u_n, z_n+1) as well as the contribution
           // of the forcing term (applied current).
 
-          // see LAB08 for solution_loc (HeatNonLinear)
           // Compute ionic variables (depends on solution_old_loc[q] ->u_n and on ionic_old_loc[q] -> z_n at prev step)
-          // TODO ionic_loc
-          // NON QUI, CREIAMO UN METODO CHE AGGIORNI LE IONIC VAR RISOLVENDO UN SISTEMA LINEARE, IN QUESTO MODO 
-          // Z SI COMPORTA ESATTAMENTE COME U
+          // The method value takes as input ionics_old_loc[q] (z_n) and solution_old_loc[q] (u_n), computing z_n+1
+          // and updating ionics_loc[q].
+          ionic_system.value(ionics_old_loc[q], solution_old_loc[q], ionics_loc[q]);
 
           // Compute Jion(u_n) (depends on ionic variables, and on solution_loc[q] -> u_n)
-           const double j_ion_loc = j_ion.value(ionic_loc[q] /* z_n+1 */, solution_old_loc[q] /* u_n */); // da controllare!!
+           const double j_ion_loc = j_ion.value(ionics_loc[q] /* z_n+1 */, solution_old_loc[q] /* u_n */); // da controllare!!
 
           // Compute Japp(u_n+1)
             forcing_term.set_time(time);
@@ -234,6 +251,9 @@ BuenoOrovioModel::assemble_rhs(const double &time)
 
       cell->get_dof_indices(dof_indices);
       system_rhs.add(dof_indices, cell_rhs);
+
+      // store the computed z values for the current cell, before moving to the next one
+      fe_evaluation_ionic.distribute_local_to_global(ionics_loc, ionics);
     }
 
   system_rhs.compress(VectorOperation::add);
@@ -294,25 +314,6 @@ BuenoOrovioModel::output(const unsigned int &time_step, const double &time) cons
                            MPI_COMM_WORLD);
 }
 
-void BuenoOrovioModel::solve_gating_system() // NOT NEEDED
-{
-  // We create a custom vectorial function in the hpp file (FunctionGatingSys -> gating_sys)
-  // and we only call its method solve.
-  // In this case we can avoid creating the dedicated method solve_gating_system()...
-  gating_system.solve(gating_vector)
-
-  // If we want a (simpler(?)) alternative:
-  // Compute v.
-  gating_vector[0] = /* equation for v, depends on the old value gating_vector[0] */;
-
-  // Compute w.
-  gating_vector[1] = /* equation for w, depends on the old value gating_vector[1] */;
-
-  // Compute s.
-  gating_vector[2] = /* equation for s, depends on the old value gating_vector[2] */;
-
-}
-
 void
 BuenoOrovioModel::solve()
 {
@@ -330,7 +331,7 @@ BuenoOrovioModel::solve()
     solution = solution_owned;
 
     pcout << "Applying the initial condition for gating problem" << std::endl;
-    gating_vector = z0;
+    // TODO
 
     // Output the initial solution.
     output(0, 0.0);
@@ -350,5 +351,8 @@ BuenoOrovioModel::solve()
       assemble_rhs(time);
       solve_time_step();
       output(time_step, time);
+
+      // Store the value of the ionic variables, it will be needed at the next timestep.
+      ionics_old = ionics;
     }
 }
