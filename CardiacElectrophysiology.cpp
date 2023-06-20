@@ -53,7 +53,7 @@ BuenoOrovioModel::setup()
 
   // Initialize the DoF handler.
   {
-    pcout << "Initializing the DoF handler" << std::endl;
+    pcout << "Initializing the DoF handler for the potential problem." << std::endl;
 
     dof_handler.reinit(mesh);
     dof_handler.distribute_dofs(*fe);
@@ -62,6 +62,21 @@ BuenoOrovioModel::setup()
     DoFTools::extract_locally_relevant_dofs(dof_handler, locally_relevant_dofs);
 
     pcout << "  Number of DoFs = " << dof_handler.n_dofs() << std::endl;
+  }
+
+  pcout << "-----------------------------------------------" << std::endl;
+
+  // Initialize the DoF handler.
+  {
+    pcout << "Initializing the DoF handler for the ionic variables problem." << std::endl;
+
+    dof_handler_ionic.reinit(mesh);
+    dof_handler_ionic.distribute_dofs(*fe_ionic);
+
+    locally_owned_dofs_ionic = dof_handler_ionic.locally_owned_dofs();
+    DoFTools::extract_locally_relevant_dofs(dof_handler_ionic, locally_relevant_dofs_ionic);
+
+    pcout << "  Number of DoFs = " << dof_handler_ionic.n_dofs() << std::endl;
   }
 
   pcout << "-----------------------------------------------" << std::endl;
@@ -91,8 +106,8 @@ BuenoOrovioModel::setup()
 
     pcout << "  Initializing the ionic variables vector" << std::endl;
     // TODO initialize, with the correct dofs from the correct fespace
-    // z_owned.reinit(locally_owned_dofs, MPI_COMM_WORLD);
-    // z.reinit(locally_owned_dofs, locally_relevant_dofs, MPI_COMM_WORLD);
+    ionicvars_owned.reinit(locally_owned_dofs_ionic, MPI_COMM_WORLD);
+    ionicvars.reinit(locally_owned_dofs_ionic, locally_relevant_dofs_ionic, MPI_COMM_WORLD);
   }
 }
 
@@ -202,10 +217,10 @@ BuenoOrovioModel::assemble_rhs(const double &time)
 
   system_rhs = 0.0;
 
-  // Value of the solution (u_n) and of the ionics (z_n, z_n+1) on current cell.
-  std::vector<double>                      solution_old_loc(n_q); // u_n
-  std::vector<std::vector<double>>         ionics_old_loc(n_q, std::vector<double>(dim_ionic));  // z_n
-  std::vector<std::vector<double>>         ionics_loc(n_q, std::vector<double>(dim_ionic));   // z_n+1
+  // Value of the solution (u_n) and of the ionicvars (z_n, z_n+1) on current cell.
+  std::vector<double>                      solution_old_loc(n_q);                                   // u_n
+  std::vector<std::vector<double>>         ionicvars_old_loc(n_q, std::vector<double>(dim_ionic));  // z_n
+  std::vector<std::vector<double>>         ionicvars_loc(n_q, std::vector<double>(dim_ionic));      // z_n+1
 
   for (const auto &cell : dof_handler.active_cell_iterators())
     {
@@ -221,7 +236,7 @@ BuenoOrovioModel::assemble_rhs(const double &time)
       // Get the value of the solution and the ionic variables at the previous timestep,
       // in each quadrature node, for the current cell.
       fe_values.get_function_values(solution, solution_old_loc);
-      fe_values_ionic.get_function_values(ionics_old, ionics_old_loc); 
+      fe_values_ionic.get_function_values(ionicvars_old, ionicvars_old_loc); 
       // terrei z e z_old separate, magari aggiornando z sulla cella corrente modifico valori che potrebbero servire a un'altra cella
       // sarà necessario implementare un aggiornamento z_old = z
 
@@ -232,20 +247,21 @@ BuenoOrovioModel::assemble_rhs(const double &time)
           // of the forcing term (applied current).
 
           // Compute ionic variables (depends on solution_old_loc[q] ->u_n and on ionic_old_loc[q] -> z_n at prev step)
-          // The method value takes as input ionics_old_loc[q] (z_n) and solution_old_loc[q] (u_n), computing z_n+1
-          // and updating ionics_loc[q].
-          ionic_system.value(ionics_old_loc[q], solution_old_loc[q], ionics_loc[q]);
+          // The method value takes as input ionicvars_old_loc[q] (z_n) and solution_old_loc[q] (u_n), computing z_n+1
+          // and updating ionicvars_loc[q].
+          IonicSystem ionic_system(solution_old_loc[q]); // TODO: a lot of instantiation, but the only way to have all the constant at compiletime...
+          ionic_system.value(ionicvars_old_loc[q], ionicvars_loc[q]);
 
           // Compute Jion(u_n) (depends on ionic variables, and on solution_loc[q] -> u_n)
-           const double j_ion_loc = j_ion.value(ionics_loc[q] /* z_n+1 */, solution_old_loc[q] /* u_n */); // da controllare!!
+           const double j_ion_loc = j_ion.value(ionicvars_loc[q] /* z_n+1 */, solution_old_loc[q] /* u_n */); 
 
           // Compute Japp(u_n+1)
-            forcing_term.set_time(time);
-            const double f_loc = forcing_term.value(fe_values.quadrature_point(q));
+            j_app.set_time(time);
+            const double j_app_loc = j_app.value(fe_values.quadrature_point(q));
 
           for (unsigned int i = 0; i < dofs_per_cell; ++i)
             {
-            //   cell_rhs(i) += (-J_ion + J_app) * fe_values.shape_value(i, q) * fe_values.JxW(q); (???)
+              cell_rhs(i) += (-j_ion_loc + j_app_loc) * fe_values.shape_value(i, q) * fe_values.JxW(q); // check!
             }
         }
 
@@ -253,7 +269,7 @@ BuenoOrovioModel::assemble_rhs(const double &time)
       system_rhs.add(dof_indices, cell_rhs);
 
       // store the computed z values for the current cell, before moving to the next one
-      fe_evaluation_ionic.distribute_local_to_global(ionics_loc, ionics);
+      fe_evaluation_ionic.distribute_local_to_global(ionicvars_loc, ionicvars);
     }
 
   system_rhs.compress(VectorOperation::add);
@@ -330,11 +346,14 @@ BuenoOrovioModel::solve()
     VectorTools::interpolate(dof_handler, u0, solution_owned);
     solution = solution_owned;
 
-    pcout << "Applying the initial condition for gating problem" << std::endl;
-    // TODO
-
     // Output the initial solution.
     output(0, 0.0);
+    pcout << "-----------------------------------------------" << std::endl;
+
+    pcout << "Applying the initial condition for ionic problem" << std::endl;
+    VectorTools::interpolate(dof_handler_ionic, z0, ionicvars_owned);
+    ionicvars = ionicvars_owned;
+
     pcout << "-----------------------------------------------" << std::endl;
   }
 
@@ -353,6 +372,6 @@ BuenoOrovioModel::solve()
       output(time_step, time);
 
       // Store the value of the ionic variables, it will be needed at the next timestep.
-      ionics_old = ionics;
+      ionicvars_old.copy_from(ionicvars);
     }
 }
