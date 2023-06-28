@@ -77,9 +77,14 @@ public:
         value(const Point<dim> &p,
               const unsigned int /*component*/ = 0) const override
         {
-            //TODO // get_time();
+            return (p==source && getTime()<threshold)*value;
         }
-        // TODO
+        
+    private:
+        // TODO tune values here
+        double threshold = 1e-4; 
+        double value = 1e-2;
+        Point<dim> source{0,0,0};
     };
 
     // Function for the initial condition of u.
@@ -147,9 +152,7 @@ public:
 
         constexpr double tau_v_min = (1 - H(u, tissue_parameters.theta_v_min))* tissue_parameters.tau_v1_min + H(u, tissue_parameters.theta_v_min)* tissue_parameters.tau_v2_min;
         constexpr double tau_w_min =  tissue_parameters.tau_w1_min + (tissue_parameters.tau_w2_min - tissue_parameters.tau_w1_min)*(1 + std::tanh(tissue_parameters.k_w_min *(u - tissue_parameters.u_w_min)))/ 2.;
-        // constexpr double tau_so =  tau_so1 + (tau_so2 - tau_so1)*(1 + std::tanh(k_so *(u - u_so)))/ 2.;
         constexpr double tau_s = (1 - H(u, tissue_parameters.theta_w)) * tissue_parameters.tau_s1 + H(u, tissue_parameters.theta_w)* tissue_parameters.tau_s2;
-        // constexpr double tau_o = (1 - H(u - theta_o)) * tau_o1 + H(u - theta_o)* tau_o2;
         constexpr double v_inf = 1 - H(u, tissue_parameters.theta_v_min);
         constexpr double w_inf = (1 - H(u, tissue_parameters.theta_o))*(1 - (u / tissue_parameters.tau_w_inf))* tissue_parameters.w_inf_star;
 
@@ -163,7 +166,16 @@ public:
         virtual double
         value(const Vector<double> &z, const double &u_old) const
         {
+
+            double tau_so =  tissue_parameters.tau_so1 + (tissue_parameters.tau_so2 - tissue_parameters.tau_so1)*(1 + std::tanh(tissue_parameters.k_so *(u - tissue_parameters.u_so)))/ 2.;
+            double tau_o = (1 - H(u - tissue_parameters.theta_o)) * tissue_parameters.tau_o1 + H(u - tissue_parameters.theta_o)* tissue_parameters.tau_o2;
+
             // expression of J_ion
+            double J_fi = -z[0]*H(u_old, tissue_parameters.theta_v)*(u_old - tissue_parameters.theta_v)*(tissue_parameters.u_u - u_old)/tissue_parameters.tau_fi ;
+            double J_so = ((u_old - tissue_parameters.u_0)*(1 - H(u_old, tissue_parameters.theta_w)/tau_o))+((H(u_old-tissue_parameters.theta_w)/tau_so)); // manca
+            double J_si = (H(u_old, tissue_parameters.theta_w)*z[1]*z[2])/tissue_parameters.tau_si;
+
+            return J_fi + J_so + J_si;
         }
     };
 
@@ -181,8 +193,7 @@ public:
         , N(N_)
         , r(r_)
         , deltat(deltat_)
-        , tissue_type(parse_tissue_type(tissue_type_))
-        , tissue_parameters(parse_tissue_parameters(tissue_type_))
+        , tissue_parameters(tissue_type_)
         , mesh(MPI_COMM_WORLD)
     {}
 
@@ -194,8 +205,107 @@ public:
 
 protected:
     // Model's parameters: //////////////
-    struct TissueParameters
+    class TissueParameters
     {
+    public:
+        TissueParameters(const std::string &tissue_type_){
+            switch (tissue_type_)
+            {
+            case "epicardium":
+                u_0 = 0.0;
+                u_u = 1.55;
+                theta_v = 0.3;
+                theta_w = 0.13;
+                theta_v_min = 0.006;
+                theta_0 = 0.006;
+                tau_v1_min = 60e-3;
+                tau_v2_min = 1150e-3;
+                tau_v_plus = 1.4506e-3;
+                tau_w1_min = 60e-3;
+                tau_w2_min = 15e-3;
+                k_w_min = 65;
+                u_w_min = 0.03;
+                tau_w_plus = 200e-3;
+                tau_fi = 0.11e-3;
+                tau_o1 = 400e-3;
+                tau_o2 = 6e-3;
+                tau_so1 = 30.0181e-3;
+                tau_so2 = 0.9957e-3;
+                k_so = 2.0458;
+                u_so = 0.65;
+                tau_s1 = 2.7342e-3;
+                tau_s2 = 16e-3;
+                k_s = 2.0994;
+                u_s = 0.9087;
+                tau_si = 1.8875e-3;
+                tau_w_inf = 0.07;
+                w_inf_star = 0.9;
+                break;
+            case "endocardium":
+                u_0 = 0.0;
+                u_u = 1.56;
+                theta_v = 0.3;
+                theta_w = 0.13;
+                theta_v_min = 0.2;
+                theta_0 = 0.006;
+                tau_v1_min = 75e-3;
+                tau_v2_min = 10e-3;
+                tau_v_plus = 1.4506e-3;
+                tau_w1_min = 6e-3;
+                tau_w2_min = 140e-3;
+                k_w_min = 200;
+                u_w_min = 0.0016;
+                tau_w_plus = 280e-3;
+                tau_fi = 0.1e-3;
+                tau_o1 = 470e-3;
+                tau_o2 = 6e-3;
+                tau_so1 = 40e-3;
+                tau_so2 = 1.2e-3;
+                k_so = 2;
+                u_so = 0.65;
+                tau_s1 = 2.7342e-3;
+                tau_s2 = 2e-3;
+                k_s = 2.0994;
+                u_s = 0.9087;
+                tau_si = 2.9013e-3;
+                tau_w_inf = 0.0273;
+                w_inf_star = 0.7;
+                break;
+            case "myocardium":
+                u_0 = 0.0;
+                u_u = 1.61;
+                theta_v = 0.3;
+                theta_w = 0.13;
+                theta_v_min = 0.1;
+                theta_0 = 0.005;
+                tau_v1_min = 80e-3;
+                tau_v2_min = 1.4506e-3;
+                tau_v_plus = 1.4506e-3;
+                tau_w1_min = 70e-3;
+                tau_w2_min = 8e-3;
+                k_w_min = 200;
+                u_w_min = 0.0016;
+                tau_w_plus = 280e-3;
+                tau_fi = 0.078e-3;
+                tau_o1 = 410e-3;
+                tau_o2 = 7e-3;
+                tau_so1 = 91e-3;
+                tau_so2 = 0.8e-3;
+                k_so = 2.1;
+                u_so = 0.6;
+                tau_s1 = 2.7342e-3;
+                tau_s2 = 4e-3;
+                k_s = 2.0994;
+                u_s = 0.9087;
+                tau_si = 3.3849e-3;
+                tau_w_inf = 0.01;
+                w_inf_star = 0.;
+                break;
+            default:
+                throw std::runtime_error("Unknown tissue type: " + tissue_type);
+                break;
+            }
+        }
         double u_0;
         double u_u;
         double theta_v;
@@ -225,131 +335,6 @@ protected:
         double tau_w_inf;
         double w_inf_star;
     };
-
-    static constexpr TissueParameters epicardium{
-        .u_0 = 0.0,
-        .u_u = 1.55,
-        .theta_v = 0.3,
-        .theta_w = 0.13,
-        .theta_v_min = 0.006,
-        .theta_0 = 0.006,
-        .tau_v1_min = 60e-3,
-        .tau_v2_min = 1150e-3,
-        .tau_v_plus = 1.4506e-3,
-        .tau_w1_min = 60e-3,
-        .tau_w2_min = 15e-3,
-        .k_w_min = 65,
-        .u_w_min = 0.03,
-        .tau_w_plus = 200e-3,
-        .tau_fi = 0.11e-3,
-        .tau_o1 = 400e-3,
-        .tau_o2 = 6e-3,
-        .tau_so1 = 30.0181e-3,
-        .tau_so2 = 0.9957e-3,
-        .k_so = 2.0458,
-        .u_so = 0.65,
-        .tau_s1 = 2.7342e-3,
-        .tau_s2 = 16e-3,
-        .k_s = 2.0994,
-        .u_s = 0.9087,
-        .tau_si = 1.8875e-3,
-        .tau_w_inf = 0.07,
-        .w_inf_star = 0.94};
-
-    static constexpr TissueParameters endocardium{
-        .u_0 = 0.0,
-        .u_u = 1.56,
-        .theta_v = 0.3,
-        .theta_w = 0.13,
-        .theta_v_min = 0.2,
-        .theta_0 = 0.006,
-        .tau_v1_min = 75e-3,
-        .tau_v2_min = 10e-3,
-        .tau_v_plus = 1.4506e-3,
-        .tau_w1_min = 6e-3,
-        .tau_w2_min = 140e-3,
-        .k_w_min = 200,
-        .u_w_min = 0.0016,
-        .tau_w_plus = 280e-3,
-        .tau_fi = 0.1e-3,
-        .tau_o1 = 470e-3,
-        .tau_o2 = 6e-3,
-        .tau_so1 = 40e-3,
-        .tau_so2 = 1.2e-3,
-        .k_so = 2,
-        .u_so = 0.65,
-        .tau_s1 = 2.7342e-3,
-        .tau_s2 = 2e-3,
-        .k_s = 2.0994,
-        .u_s = 0.9087,
-        .tau_si = 2.9013e-3,
-        .tau_w_inf = 0.0273,
-        .w_inf_star = 0.78};
-        
-    static constexpr TissueParameters myocardium{
-        .u_0 = 0.0,
-        .u_u = 1.61,
-        .theta_v = 0.3,
-        .theta_w = 0.13,
-        .theta_v_min = 0.1,
-        .theta_0 = 0.005,
-        .tau_v1_min = 80e-3,
-        .tau_v2_min = 1.4506e-3,
-        .tau_v_plus = 1.4506e-3,
-        .tau_w1_min = 70e-3,
-        .tau_w2_min = 8e-3,
-        .k_w_min = 200,
-        .u_w_min = 0.0016,
-        .tau_w_plus = 280e-3,
-        .tau_fi = 0.078e-3,
-        .tau_o1 = 410e-3,
-        .tau_o2 = 7e-3,
-        .tau_so1 = 91e-3,
-        .tau_so2 = 0.8e-3,
-        .k_so = 2.1,
-        .u_so = 0.6,
-        .tau_s1 = 2.7342e-3,
-        .tau_s2 = 4e-3,
-        .k_s = 2.0994,
-        .u_s = 0.9087,
-        .tau_si = 3.3849e-3,
-        .tau_w_inf = 0.01,
-        .w_inf_star = 0.5};
-
-        // Tissue type.
-        enum class TissueType {
-            Epicardium,
-            Endocardium,
-            Myocardium
-        };
-
-    TissueType parse_tissue_type(const std::string &tissue_type) const
-    {
-        // to lowcase (Andre)
-        if (tissue_type == "epicardium") 
-            return TissueType::Epicardium;
-        else if (tissue_type == "endocardium")
-            return TissueType::Endocardium;
-        else if (tissue_type == "myocardium")
-            return TissueType::Myocardium;
-        else
-            throw std::runtime_error("Unknown tissue type: " + tissue_type);
-
-    }
-
-    TissueParameters parse_tissue_parameters(const std::string &tissue_type) const
-    {
-        // to lowcase (Andre)
-        if (tissue_type == "epicardium")
-            return BuenoOrovioModel::epicardium; //?
-        else if (tissue_type == "endocardium")
-            return BuenoOrovioModel::endocardium; //?
-        else if (tissue_type == "myocardium")
-            return BuenoOrovioModel::myocardium; //?
-        else
-            throw std::runtime_error("Unknown tissue type: " + tissue_type);
-
-    }
 
     // FE methods: //////////////////////
 
@@ -410,10 +395,7 @@ protected:
 
     // Time step.
     const double deltat;
-
-    // Tissue type.
-    const TissueType tissue_type;
-
+    
     // Tissue parameters.
     const TissueParameters tissue_parameters;
 
