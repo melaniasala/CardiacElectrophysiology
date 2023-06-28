@@ -123,42 +123,42 @@ public:
         }
     };
 
-    // Vector valued function corresponding to the gating variable system.
-    class IonicSystem
-    {
-    public:
-        IonicSystem(double u_) {
-            this.u = u_;
-        }
+    // // Vector valued function corresponding to the gating variable system.
+    // class IonicSystem
+    // {
+    // public:
+    //     IonicSystem(double u_) {
+    //         this.u = u_;
+    //     }
 
-        // This method compute the values of the ionic variables for the current quadrature node, taking as
-        // input the reference to the gating variables' vector and updates z_new with the computed values.
-        void
-        value(const std::vector<double> &z_old, std::vector<double> &z_new) const
-        {
-            z_new[0] = (z_old[0] * tau_v_min + (1 - H(u, tissue_parameters.theta_v)) * deltat * v_inf) 
-                        * tissue_parameters.tau_v_plus 
-                        / (tau_v_min * tissue_parameters.tau_v_plus + deltat * tissue_parameters.tau_v_plus + H(u, tissue_parameters.theta_v) * deltat * (tau_v_min - tissue_parameters.tau_v_plus));
-            z_new[1] = (z_old[1] * tau_w_min + (1 - H(u, tissue_parameters.theta_w)) * deltat * w_inf) 
-                        * tau_w_plus 
-                        / (tau_w_min * tissue_parameters.tau_w_plus + deltat * tissue_parameters.tau_w_plus + H(u, tissue_parameters.theta_w) * deltat * (tau_w_min - tissue_parameters.tau_w_plus));
-            z_new[2] = (z_old[2] * tau_s + 1 + std::tanh(tissue_parameters.k_s * (u - tissue_parameters.u_s))) 
-                        / (2 * (tau_s + 1))
-        }
+    //     // This method compute the values of the ionic variables for the current quadrature node, taking as
+    //     // input the reference to the gating variables' vector and updates z_new with the computed values.
+    //     void
+    //     value(const std::vector<double> &z_old, std::vector<double> &z_new) const
+    //     {
+    //         z_new[0] = (z_old[0] * tau_v_min + (1 - H(u, tissue_parameters.theta_v)) * deltat * v_inf) 
+    //                     * tissue_parameters.tau_v_plus 
+    //                     / (tau_v_min * tissue_parameters.tau_v_plus + deltat * tissue_parameters.tau_v_plus + H(u, tissue_parameters.theta_v) * deltat * (tau_v_min - tissue_parameters.tau_v_plus));
+    //         z_new[1] = (z_old[1] * tau_w_min + (1 - H(u, tissue_parameters.theta_w)) * deltat * w_inf) 
+    //                     * tau_w_plus 
+    //                     / (tau_w_min * tissue_parameters.tau_w_plus + deltat * tissue_parameters.tau_w_plus + H(u, tissue_parameters.theta_w) * deltat * (tau_w_min - tissue_parameters.tau_w_plus));
+    //         z_new[2] = (z_old[2] * tau_s + 1 + std::tanh(tissue_parameters.k_s * (u - tissue_parameters.u_s))) 
+    //                     / (2 * (tau_s + 1))
+    //     }
 
-    protected:
-        // Here some constant for computing the system.
-        // maybe the H??
+    // protected:
+    //     // Here some constant for computing the system.
+    //     // maybe the H??
 
-        constexpr double tau_v_min = (1 - H(u, tissue_parameters.theta_v_min))* tissue_parameters.tau_v1_min + H(u, tissue_parameters.theta_v_min)* tissue_parameters.tau_v2_min;
-        constexpr double tau_w_min =  tissue_parameters.tau_w1_min + (tissue_parameters.tau_w2_min - tissue_parameters.tau_w1_min)*(1 + std::tanh(tissue_parameters.k_w_min *(u - tissue_parameters.u_w_min)))/ 2.;
-        constexpr double tau_s = (1 - H(u, tissue_parameters.theta_w)) * tissue_parameters.tau_s1 + H(u, tissue_parameters.theta_w)* tissue_parameters.tau_s2;
-        constexpr double v_inf = 1 - H(u, tissue_parameters.theta_v_min);
-        constexpr double w_inf = (1 - H(u, tissue_parameters.theta_o))*(1 - (u / tissue_parameters.tau_w_inf))* tissue_parameters.w_inf_star;
+    //     constexpr double tau_v_min = (1 - H(u, tissue_parameters.theta_v_min))* tissue_parameters.tau_v1_min + H(u, tissue_parameters.theta_v_min)* tissue_parameters.tau_v2_min;
+    //     constexpr double tau_w_min =  tissue_parameters.tau_w1_min + (tissue_parameters.tau_w2_min - tissue_parameters.tau_w1_min)*(1 + std::tanh(tissue_parameters.k_w_min *(u - tissue_parameters.u_w_min)))/ 2.;
+    //     constexpr double tau_s = (1 - H(u, tissue_parameters.theta_w)) * tissue_parameters.tau_s1 + H(u, tissue_parameters.theta_w)* tissue_parameters.tau_s2;
+    //     constexpr double v_inf = 1 - H(u, tissue_parameters.theta_v_min);
+    //     constexpr double w_inf = (1 - H(u, tissue_parameters.theta_o))*(1 - (u / tissue_parameters.tau_w_inf))* tissue_parameters.w_inf_star;
 
-    private:
-        double u;
-    };
+    // private:
+    //     double u;
+    // };
 
     class FunctionJion
     {

@@ -188,6 +188,22 @@ BuenoOrovioModel::assemble_matrices()
 
 }
 
+// This method compute the values of the ionic variables for the current quadrature node, taking as
+// input the reference to the gating variables' vector and updates z_new with the computed values.
+void 
+BuenoOrovioModel::solve_ionic_system(const std::vector<double> &z_old, const double &u, std::vector<double> &z_new) {
+   
+        double tau_v_min = (1 - H(u, tissue_parameters.theta_v_min))* tissue_parameters.tau_v1_min + H(u, tissue_parameters.theta_v_min)* tissue_parameters.tau_v2_min;
+        double tau_w_min =  tissue_parameters.tau_w1_min + (tissue_parameters.tau_w2_min - tissue_parameters.tau_w1_min)*(1 + std::tanh(tissue_parameters.k_w_min *(u - tissue_parameters.u_w_min)))/ 2.;
+        double tau_s = (1 - H(u, tissue_parameters.theta_w)) * tissue_parameters.tau_s1 + H(u, tissue_parameters.theta_w)* tissue_parameters.tau_s2;
+        double v_inf = 1 - H(u, tissue_parameters.theta_v_min);
+        double w_inf = (1 - H(u, tissue_parameters.theta_o))*(1 - (u / tissue_parameters.tau_w_inf))* tissue_parameters.w_inf_star;
+
+        z_new[0] = (z_old[0] * tau_v_min + (1 - H(u, tissue_parameters.theta_v)) * deltat * v_inf) * tissue_parameters.tau_v_plus / (tau_v_min * tissue_parameters.tau_v_plus + deltat * tissue_parameters.tau_v_plus + H(u, tissue_parameters.theta_v) * deltat * (tau_v_min - tissue_parameters.tau_v_plus));
+        z_new[1] = (z_old[1] * tau_w_min + (1 - H(u, tissue_parameters.theta_w)) * deltat * w_inf) * tau_w_plus / (tau_w_min * tissue_parameters.tau_w_plus + deltat * tissue_parameters.tau_w_plus + H(u, tissue_parameters.theta_w) * deltat * (tau_w_min - tissue_parameters.tau_w_plus));
+        z_new[2] = (z_old[2] * tau_s + 1 + std::tanh(tissue_parameters.k_s * (u - tissue_parameters.u_s))) / (2 * (tau_s + 1));
+}
+
 void
 BuenoOrovioModel::assemble_rhs(const double &time)
 {
