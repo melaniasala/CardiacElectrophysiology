@@ -15,6 +15,7 @@
 #include <deal.II/grid/grid_in.h>
 
 #include <deal.II/lac/solver_cg.h>
+#include <deal.II/lac/solver_gmres.h>
 #include <deal.II/lac/trilinos_precondition.h>
 #include <deal.II/lac/trilinos_sparse_matrix.h>
 
@@ -186,6 +187,7 @@ public:
         , deltat(deltat_)
         , tissue_parameters(tissue_type_)
         , mesh(MPI_COMM_WORLD)
+        , j_ion(*this)
     {}
 
     // Initialization.
@@ -331,6 +333,8 @@ protected:
     // Assemble the mass and stiffness matrices.
     void assemble_matrices();
 
+    void solve_ionic_system(const std::vector<double> &z_old, const double &u, std::vector<double> &z_new);
+
     // Assemble the right-hand side of the problem.
     void assemble_rhs(const double &time);
 
@@ -431,4 +435,7 @@ protected:
     // Ionic variables vectors at the previous timestep and at the current one.
     std::vector<std::vector<double>>         ionicvars_old_loc;  // z_n
     std::vector<std::vector<double>>         ionicvars_loc;      // z_n+1
+
+    // Ionic current.
+    FunctionJion j_ion;
 };

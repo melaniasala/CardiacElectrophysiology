@@ -66,18 +66,18 @@ BuenoOrovioModel::setup()
 
   pcout << "-----------------------------------------------" << std::endl;
 
-  // Initialize the DoF handler.
-  {
-    pcout << "Initializing the DoF handler for the ionic variables problem." << std::endl;
+  // // Initialize the DoF handler.
+  // {
+  //   pcout << "Initializing the DoF handler for the ionic variables problem." << std::endl;
 
-    dof_handler_ionic.reinit(mesh);
-    dof_handler_ionic.distribute_dofs(*fe_ionic);
+  //   dof_handler_ionic.reinit(mesh);
+  //   dof_handler_ionic.distribute_dofs(*fe_ionic);
 
-    locally_owned_dofs_ionic = dof_handler_ionic.locally_owned_dofs();
-    DoFTools::extract_locally_relevant_dofs(dof_handler_ionic, locally_relevant_dofs_ionic);
+  //   // locally_owned_dofs_ionic = dof_handler_ionic.locally_owned_dofs();
+  //   // DoFTools::extract_locally_relevant_dofs(dof_handler_ionic, locally_relevant_dofs_ionic);
 
-    pcout << "  Number of DoFs = " << dof_handler_ionic.n_dofs() << std::endl;
-  }
+  //   pcout << "  Number of DoFs = " << dof_handler_ionic.n_dofs() << std::endl;
+  // }
 
   pcout << "-----------------------------------------------" << std::endl;
 
@@ -203,10 +203,10 @@ BuenoOrovioModel::solve_ionic_system(const std::vector<double> &z_old, const dou
         double tau_w_min =  tissue_parameters.tau_w1_min + (tissue_parameters.tau_w2_min - tissue_parameters.tau_w1_min)*(1 + std::tanh(tissue_parameters.k_w_min *(u - tissue_parameters.u_w_min)))/ 2.;
         double tau_s = (1 - H(u, tissue_parameters.theta_w)) * tissue_parameters.tau_s1 + H(u, tissue_parameters.theta_w)* tissue_parameters.tau_s2;
         double v_inf = 1 - H(u, tissue_parameters.theta_v_min);
-        double w_inf = (1 - H(u, tissue_parameters.theta_o))*(1 - (u / tissue_parameters.tau_w_inf))* tissue_parameters.w_inf_star;
+        double w_inf = (1 - H(u, tissue_parameters.theta_0))*(1 - (u / tissue_parameters.tau_w_inf))* tissue_parameters.w_inf_star;
 
         z_new[0] = (z_old[0] * tau_v_min + (1 - H(u, tissue_parameters.theta_v)) * deltat * v_inf) * tissue_parameters.tau_v_plus / (tau_v_min * tissue_parameters.tau_v_plus + deltat * tissue_parameters.tau_v_plus + H(u, tissue_parameters.theta_v) * deltat * (tau_v_min - tissue_parameters.tau_v_plus));
-        z_new[1] = (z_old[1] * tau_w_min + (1 - H(u, tissue_parameters.theta_w)) * deltat * w_inf) * tau_w_plus / (tau_w_min * tissue_parameters.tau_w_plus + deltat * tissue_parameters.tau_w_plus + H(u, tissue_parameters.theta_w) * deltat * (tau_w_min - tissue_parameters.tau_w_plus));
+        z_new[1] = (z_old[1] * tau_w_min + (1 - H(u, tissue_parameters.theta_w)) * deltat * w_inf) * tissue_parameters.tau_w_plus / (tau_w_min * tissue_parameters.tau_w_plus + deltat * tissue_parameters.tau_w_plus + H(u, tissue_parameters.theta_w) * deltat * (tau_w_min - tissue_parameters.tau_w_plus));
         z_new[2] = (z_old[2] * tau_s + 1 + std::tanh(tissue_parameters.k_s * (u - tissue_parameters.u_s))) / (2 * (tau_s + 1));
 }
 
@@ -250,8 +250,8 @@ BuenoOrovioModel::assemble_rhs(const double &time)
         continue;
 
       fe_values.reinit(cell);
-      fe_values_ionic.reinit(cell);
-      fe_evaluation_ionic.reinit(cell);
+      // fe_values_ionic.reinit(cell);
+      // fe_evaluation_ionic.reinit(cell);
 
       cell_rhs = 0.0;
 
