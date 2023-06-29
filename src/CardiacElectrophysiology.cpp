@@ -261,7 +261,7 @@ BuenoOrovioModel::assemble_rhs(const double &time)
       // fe_values_ionic.get_function_values(ionicvars_old, ionicvars_old_loc); 
       // terrei z e z_old separate, magari aggiornando z sulla cella corrente modifico valori che potrebbero servire a un'altra cella
       // sarà necessario implementare un aggiornamento z_old = z
-
+      
       for (unsigned int q = 0; q < n_q; ++q)
         {
           // Here we compute the non-linear contribution of  
@@ -272,12 +272,11 @@ BuenoOrovioModel::assemble_rhs(const double &time)
           // The method value takes as input ionicvars_old_loc[q] (z_n) and solution_old_loc[q] (u_n), computing z_n+1
           // and updating ionicvars_loc[q].
           solve_ionic_system(ionicvars_old_loc[q], solution_old_loc[q], ionicvars_loc[q]);
-
+          
           // Compute Jion(u_n) (depends on ionic variables, and on solution_loc[q] -> u_n)
            const double j_ion_loc = j_ion.value(ionicvars_loc[q] /* z_n+1 */, solution_old_loc[q] /* u_n */); 
 
           // Compute Japp(u_n+1)
-            j_app.set_time(time);
             const double j_app_loc = j_app.value(fe_values.quadrature_point(q));
 
           for (unsigned int i = 0; i < dofs_per_cell; ++i)
@@ -378,7 +377,7 @@ BuenoOrovioModel::solve()
     functionz0.vector_value(z0);
     
     ionicvars_old_loc.assign(n_q, z0);    // z_n
-    ionicvars_loc.reserve(n_q);           // z_n+1
+    ionicvars_loc.assign(n_q,z0);           // z_n+1
 
     pcout << "-----------------------------------------------" << std::endl;
   }

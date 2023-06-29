@@ -75,29 +75,36 @@ public:
     {
     public:
         virtual double
-        value(const Point<dim> &p,
+        value(const Point<dim> &/*p*/,
               const unsigned int /*component*/ = 0) const override
         {
-            return (p==source && get_time()<threshold)*val;
+
+            return 0;
         }
         
-    private:
-        // TODO tune values here
-        double threshold = 1e-4; 
-        double val = 1e-2;
-        Point<dim> source{0,0,0};
+    
     };
 
     // Function for the initial condition of u.
     class FunctionU0 : public Function<dim>
     {
     public:
+        FunctionU0(const double &ini_time_):ini_time(ini_time_),source(0,0,0){}
+
         virtual double
-        value(const Point<dim> &/*p*/,
+        value(const Point<dim> &p,
               const unsigned int /*component*/ = 0) const override
         {
-            return 0;
+            // if (get_time()==ini_time) // non serve tanto u0 solo iniziale non c'è time
+            //     cout << "PUNTO FORZANTE TROVATO" << std::endl;
+            return (p==source)*val;
         }
+
+    private:
+        // TODO tune values here
+        double ini_time;
+        double val = 1e2;
+        Point<dim> source;
     };
 
     // Vector valued function for initial condition of ionic variables.
@@ -181,6 +188,7 @@ public:
         : mpi_size(Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD))
         , mpi_rank(Utilities::MPI::this_mpi_process(MPI_COMM_WORLD))
         , pcout(std::cout, mpi_rank == 0)
+        , u0(deltat_)
         , T(T_)
         , N(N_)
         , r(r_)
