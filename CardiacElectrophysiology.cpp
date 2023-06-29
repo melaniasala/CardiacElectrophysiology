@@ -36,8 +36,8 @@ BuenoOrovioModel::setup()
 
     fe = std::make_unique<FE_SimplexP<dim>>(r);
 
-    FE_SimplexP<dim> fe_scalar(r);
-    fe_ionic = std::make_unique<FESystem<dim>>(fe_scalar, dim_ionic);
+    // FE_SimplexP<dim> fe_scalar(r);
+    // fe_ionic = std::make_unique<FESystem<dim>>(fe_scalar, dim_ionic);
 
     pcout << "  Degree                     = " << fe->degree << std::endl;
     pcout << "  DoFs per cell              = " << fe->dofs_per_cell
@@ -104,10 +104,16 @@ BuenoOrovioModel::setup()
     solution_owned.reinit(locally_owned_dofs, MPI_COMM_WORLD);
     solution.reinit(locally_owned_dofs, locally_relevant_dofs, MPI_COMM_WORLD);
 
-    pcout << "  Initializing the ionic variables vector" << std::endl;
+    // pcout << "  Initializing the ionic variables vector" << std::endl;
     // TODO initialize, with the correct dofs from the correct fespace
-    ionicvars_owned.reinit(locally_owned_dofs_ionic, MPI_COMM_WORLD);
-    ionicvars.reinit(locally_owned_dofs_ionic, locally_relevant_dofs_ionic, MPI_COMM_WORLD);
+    // const unsigned int n_q           = quadrature->size();
+    // std::vector<double> z_init(dim_ionic);
+    // func
+    
+    // ionicvars_old_loc.assign(n_q, z_init);  // z_n
+    // ionicvars_loc(n_q, std::vector<double>(dim_ionic));      // z_n+1
+    // ionicvars_owned.reinit(locally_owned_dofs_ionic, MPI_COMM_WORLD);
+    // ionicvars.reinit(locally_owned_dofs_ionic, locally_relevant_dofs_ionic, MPI_COMM_WORLD);
   }
 }
 
@@ -217,15 +223,15 @@ BuenoOrovioModel::assemble_rhs(const double &time)
 
   // Since the ionic problem is vectorial and not scalar as the one 
   // for the potential we need different fe_values  
-  FEValues<dim> fe_values_ionic(*fe_ionic,
-                          *quadrature,
-                          update_values | update_quadrature_points |
-                            update_JxW_values);
+  // FEValues<dim> fe_values_ionic(*fe_ionic,
+  //                         *quadrature,
+  //                         update_values | update_quadrature_points |
+  //                           update_JxW_values);
 
-  FEEvaluation<dim> fe_evaluation_ionic(*fe_ionic,
-                          *quadrature,
-                          update_values | update_quadrature_points |
-                            update_JxW_values);
+  // FEEvaluation<dim> fe_evaluation_ionic(*fe_ionic,
+  //                         *quadrature,
+  //                         update_values | update_quadrature_points |
+  //                           update_JxW_values);
 
   Vector<double> cell_rhs(dofs_per_cell);
 
@@ -235,8 +241,8 @@ BuenoOrovioModel::assemble_rhs(const double &time)
 
   // Value of the solution (u_n) and of the ionicvars (z_n, z_n+1) on current cell.
   std::vector<double>                      solution_old_loc(n_q);                                   // u_n
-  std::vector<std::vector<double>>         ionicvars_old_loc(n_q, std::vector<double>(dim_ionic));  // z_n
-  std::vector<std::vector<double>>         ionicvars_loc(n_q, std::vector<double>(dim_ionic));      // z_n+1
+  // std::vector<std::vector<double>>         ionicvars_old_loc(n_q, std::vector<double>(dim_ionic));  // z_n
+  // std::vector<std::vector<double>>         ionicvars_loc(n_q, std::vector<double>(dim_ionic));      // z_n+1
 
   for (const auto &cell : dof_handler.active_cell_iterators())
     {
@@ -252,7 +258,7 @@ BuenoOrovioModel::assemble_rhs(const double &time)
       // Get the value of the solution and the ionic variables at the previous timestep,
       // in each quadrature node, for the current cell.
       fe_values.get_function_values(solution, solution_old_loc);
-      fe_values_ionic.get_function_values(ionicvars_old, ionicvars_old_loc); 
+      // fe_values_ionic.get_function_values(ionicvars_old, ionicvars_old_loc); 
       // terrei z e z_old separate, magari aggiornando z sulla cella corrente modifico valori che potrebbero servire a un'altra cella
       // sarà necessario implementare un aggiornamento z_old = z
 
@@ -265,8 +271,7 @@ BuenoOrovioModel::assemble_rhs(const double &time)
           // Compute ionic variables (depends on solution_old_loc[q] ->u_n and on ionic_old_loc[q] -> z_n at prev step)
           // The method value takes as input ionicvars_old_loc[q] (z_n) and solution_old_loc[q] (u_n), computing z_n+1
           // and updating ionicvars_loc[q].
-          IonicSystem ionic_system(solution_old_loc[q]); // TODO: a lot of instantiation, but the only way to have all the constant at compiletime...
-          ionic_system.value(ionicvars_old_loc[q], ionicvars_loc[q]);
+          solve_ionic_system(ionicvars_old_loc[q], solution_old_loc[q], ionicvars_loc[q]);
 
           // Compute Jion(u_n) (depends on ionic variables, and on solution_loc[q] -> u_n)
            const double j_ion_loc = j_ion.value(ionicvars_loc[q] /* z_n+1 */, solution_old_loc[q] /* u_n */); 
@@ -283,9 +288,6 @@ BuenoOrovioModel::assemble_rhs(const double &time)
 
       cell->get_dof_indices(dof_indices);
       system_rhs.add(dof_indices, cell_rhs);
-
-      // store the computed z values for the current cell, before moving to the next one
-      fe_evaluation_ionic.distribute_local_to_global(ionicvars_loc, ionicvars);
     }
 
   system_rhs.compress(VectorOperation::add);
@@ -367,8 +369,16 @@ BuenoOrovioModel::solve()
     pcout << "-----------------------------------------------" << std::endl;
 
     pcout << "Applying the initial condition for ionic problem" << std::endl;
-    VectorTools::interpolate(dof_handler_ionic, z0, ionicvars_owned);
-    ionicvars = ionicvars_owned;
+
+    // VectorTools::interpolate(dof_handler_ionic, z0, ionicvars_owned);
+    // ionicvars = ionicvars_owned;
+
+    const unsigned int n_q = quadrature->size();
+    std::vector<double> z0(dim_ionic);
+    functionz0.vector_value(z0);
+    
+    ionicvars_old_loc.assign(n_q, z0);    // z_n
+    ionicvars_loc.reserve(n_q);           // z_n+1
 
     pcout << "-----------------------------------------------" << std::endl;
   }
@@ -388,6 +398,6 @@ BuenoOrovioModel::solve()
       output(time_step, time);
 
       // Store the value of the ionic variables, it will be needed at the next timestep.
-      ionicvars_old.copy_from(ionicvars);
+      ionicvars_old_loc.copy_from(ionicvars_loc);
     }
 }

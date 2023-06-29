@@ -42,7 +42,7 @@ public:
     static constexpr unsigned int dim_ionic = 3;
 
     // Diffusion coefficient.
-    static constexpr double D = 1.171 //+-0.221
+    static constexpr double D = 1.171; //+-0.221
 
     // Functions. ///////////////////////////////////////////////////////////////
 
@@ -100,27 +100,27 @@ public:
     };
 
     // Vector valued function for initial condition of ionic variables.
-    class FunctionZ0 : public Function<dim>
+    class FunctionZ0
     {
     public:
         virtual void
-        vector_value(const Point<dim> &p, Vector<double> &values) const override
+        vector_value(Vector<double> &values) const
         {
         values[0] = 1.0; // v
         values[1] = 1.0; // w
         values[2] = 0.0; // s
         }
 
-        virtual double
-        value(const Point<dim> &p, const unsigned int component = 0) const override
-        {
-        if (component == 0)
-            return 1.0; // v
-        else if (component == 1)
-            return 1.0; // w
-        else // if (component == 2)
-            return 0.0; // s
-        }
+        // virtual double
+        // value(const Point<dim> &p, const unsigned int component = 0) const override
+        // {
+        // if (component == 0)
+        //     return 1.0; // v
+        // else if (component == 1)
+        //     return 1.0; // w
+        // else // if (component == 2)
+        //     return 0.0; // s
+        // }
     };
 
     // // Vector valued function corresponding to the gating variable system.
@@ -371,10 +371,7 @@ protected:
 
     // Initial conditions.
     FunctionU0 u0;
-    IonicVct0 z0;
-
-    // Gating variables system.
-    IonicSystem ionic_system;
+    FunctionZ0 functionz0;
 
     // Exact solution.
     ExactSolution exact_solution;
@@ -419,11 +416,9 @@ protected:
 
     // DoFs owned by current process.
     IndexSet locally_owned_dofs;
-    IndexSet locally_owned_dofs_ionic;
 
     // DoFs relevant to the current process (including ghost DoFs).
     IndexSet locally_relevant_dofs;
-    IndexSet locally_relevant_dofs_ionic;
 
     // Mass matrix M / deltat.
     TrilinosWrappers::SparseMatrix mass_matrix;
@@ -446,12 +441,7 @@ protected:
     // System solution (including ghost elements).
     TrilinosWrappers::MPI::Vector solution;
 
-    // Ionic variables at the previous timestep.
-    TrilinosWrappers::MPI::Vector ionicvars_old;
-
-    // Ionic variables at the current timestep.
-    TrilinosWrappers::MPI::Vector ionicvars;
-
-    // Ionic variables (without ghost elements).
-    TrilinosWrappers::MPI::Vector ionicvars_owned;
+    // Ionic variables vectors at the previous timestep and at the current one.
+    std::vector<std::vector<double>>         ionicvars_old_loc;  // z_n
+    std::vector<std::vector<double>>         ionicvars_loc;      // z_n+1
 };
