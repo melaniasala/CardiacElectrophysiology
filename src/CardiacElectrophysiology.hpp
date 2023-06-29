@@ -101,11 +101,11 @@ public:
     };
 
     // Vector valued function for initial condition of ionic variables.
-    class FunctionZ0 : public Function<dim>
+    class FunctionZ0
     {
     public:
-        virtual void
-        vector_value(const Point<dim> &/*p*/, Vector<double> &values) const override
+        void
+        vector_value(std::vector<double> &values)
         {
         values[0] = 1.0; // v
         values[1] = 1.0; // w
@@ -154,7 +154,7 @@ public:
     {
     public:
         FunctionJion(BuenoOrovioModel &x):m(x){}
-        double value(const Vector<double> &z, const double &u_old) const
+        double value(const std::vector<double> &z, const double &u_old) const
         {
 
             double tau_so =  m.tissue_parameters.tau_so1 + (m.tissue_parameters.tau_so2 - m.tissue_parameters.tau_so1)*(1 + std::tanh(m.tissue_parameters.k_so *(u_old - m.tissue_parameters.u_so)))/ 2.;

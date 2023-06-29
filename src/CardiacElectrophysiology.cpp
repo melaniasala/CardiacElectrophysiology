@@ -306,7 +306,7 @@ BuenoOrovioModel::solve_time_step()
   preconditioner.initialize(
     lhs_matrix, TrilinosWrappers::PreconditionSSOR::AdditionalData(1.0));
 
-  solver.solve(matrix_lhs, solution_owned, system_rhs, preconditioner);
+  solver.solve(lhs_matrix, solution_owned, system_rhs, preconditioner);
   pcout << "   " << solver_control.last_step() << " GMRES iterations"
         << std::endl;
 
@@ -398,6 +398,6 @@ BuenoOrovioModel::solve()
       output(time_step, time);
 
       // Store the value of the ionic variables, it will be needed at the next timestep.
-      ionicvars_old_loc.copy_from(ionicvars_loc);
+      ionicvars_old_loc.swap(ionicvars_loc);
     }
 }
