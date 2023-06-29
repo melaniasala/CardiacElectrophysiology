@@ -29,7 +29,7 @@
 
 using namespace dealii;
 
-#define H(x, c) x >= c
+#define H(x, c) (x >= c)
 
 // Class representing the Bueno-Orovio model of the heart
 class BuenoOrovioModel
@@ -77,13 +77,13 @@ public:
         value(const Point<dim> &p,
               const unsigned int /*component*/ = 0) const override
         {
-            return (p==source && getTime()<threshold)*value;
+            return (p==source && get_time()<threshold)*val;
         }
         
     private:
         // TODO tune values here
         double threshold = 1e-4; 
-        double value = 1e-2;
+        double val = 1e-2;
         Point<dim> source{0,0,0};
     };
 
@@ -92,7 +92,7 @@ public:
     {
     public:
         virtual double
-        value(const Point<dim> &p,
+        value(const Point<dim> &/*p*/,
               const unsigned int /*component*/ = 0) const override
         {
             return 0;
@@ -100,27 +100,16 @@ public:
     };
 
     // Vector valued function for initial condition of ionic variables.
-    class FunctionZ0
+    class FunctionZ0 : public Function<dim>
     {
     public:
         virtual void
-        vector_value(Vector<double> &values) const
+        vector_value(const Point<dim> &/*p*/, Vector<double> &values) const override
         {
         values[0] = 1.0; // v
         values[1] = 1.0; // w
         values[2] = 0.0; // s
         }
-
-        // virtual double
-        // value(const Point<dim> &p, const unsigned int component = 0) const override
-        // {
-        // if (component == 0)
-        //     return 1.0; // v
-        // else if (component == 1)
-        //     return 1.0; // w
-        // else // if (component == 2)
-        //     return 0.0; // s
-        // }
     };
 
     // // Vector valued function corresponding to the gating variable system.
@@ -163,25 +152,27 @@ public:
     class FunctionJion
     {
     public:
-        virtual double
-        value(const Vector<double> &z, const double &u_old) const
+        FunctionJion(BuenoOrovioModel &x):m(x){}
+        double value(const Vector<double> &z, const double &u_old) const
         {
 
-            double tau_so =  tissue_parameters.tau_so1 + (tissue_parameters.tau_so2 - tissue_parameters.tau_so1)*(1 + std::tanh(tissue_parameters.k_so *(u - tissue_parameters.u_so)))/ 2.;
-            double tau_o = (1 - H(u - tissue_parameters.theta_o)) * tissue_parameters.tau_o1 + H(u - tissue_parameters.theta_o)* tissue_parameters.tau_o2;
+            double tau_so =  m.tissue_parameters.tau_so1 + (m.tissue_parameters.tau_so2 - m.tissue_parameters.tau_so1)*(1 + std::tanh(m.tissue_parameters.k_so *(u_old - m.tissue_parameters.u_so)))/ 2.;
+            double tau_o = (1 - H(u_old, m.tissue_parameters.theta_0)) * m.tissue_parameters.tau_o1 + H(u_old, m.tissue_parameters.theta_0)* m.tissue_parameters.tau_o2;
 
             // expression of J_ion
-            double J_fi = -z[0]*H(u_old, tissue_parameters.theta_v)*(u_old - tissue_parameters.theta_v)*(tissue_parameters.u_u - u_old)/tissue_parameters.tau_fi ;
-            double J_so = ((u_old - tissue_parameters.u_0)*(1 - H(u_old, tissue_parameters.theta_w)/tau_o))+((H(u_old-tissue_parameters.theta_w)/tau_so)); // manca
-            double J_si = (H(u_old, tissue_parameters.theta_w)*z[1]*z[2])/tissue_parameters.tau_si;
+            double J_fi = -z[0]*H(u_old, m.tissue_parameters.theta_v)*(u_old - m.tissue_parameters.theta_v)*(m.tissue_parameters.u_u - u_old)/m.tissue_parameters.tau_fi ;
+            double J_so = ((u_old - m.tissue_parameters.u_0)*(1 - H(u_old, m.tissue_parameters.theta_w)/tau_o))+((H(u_old,m.tissue_parameters.theta_w)/tau_so)); // manca
+            double J_si = (H(u_old, m.tissue_parameters.theta_w)*z[1]*z[2])/m.tissue_parameters.tau_si;
 
             return J_fi + J_so + J_si;
         }
+    private:
+        BuenoOrovioModel &m;
     };
 
     // Constructor. We provide the final time, time step Delta t and theta method
     // parameter as constructor arguments.
-    BuenoOrovio(const unsigned int &N_,
+    BuenoOrovioModel(const unsigned int &N_,
                 const unsigned int &r_,
                 const double &T_,
                 const double &deltat_,
@@ -209,9 +200,8 @@ protected:
     {
     public:
         TissueParameters(const std::string &tissue_type_){
-            switch (tissue_type_)
+            if (!tissue_type_.compare("epicardium"))
             {
-            case "epicardium":
                 u_0 = 0.0;
                 u_u = 1.55;
                 theta_v = 0.3;
@@ -240,8 +230,9 @@ protected:
                 tau_si = 1.8875e-3;
                 tau_w_inf = 0.07;
                 w_inf_star = 0.9;
-                break;
-            case "endocardium":
+            }
+            else if(!tissue_type_.compare("endocardium"))
+            {
                 u_0 = 0.0;
                 u_u = 1.56;
                 theta_v = 0.3;
@@ -270,8 +261,8 @@ protected:
                 tau_si = 2.9013e-3;
                 tau_w_inf = 0.0273;
                 w_inf_star = 0.7;
-                break;
-            case "myocardium":
+            }
+            else if(!tissue_type_.compare("myocardium")){
                 u_0 = 0.0;
                 u_u = 1.61;
                 theta_v = 0.3;
@@ -300,10 +291,9 @@ protected:
                 tau_si = 3.3849e-3;
                 tau_w_inf = 0.01;
                 w_inf_star = 0.;
-                break;
-            default:
-                throw std::runtime_error("Unknown tissue type: " + tissue_type);
-                break;
+            }
+            else {
+                throw std::runtime_error("Unknown tissue type: " + tissue_type_);
             }
         }
         double u_0;
@@ -372,9 +362,6 @@ protected:
     // Initial conditions.
     FunctionU0 u0;
     FunctionZ0 functionz0;
-
-    // Exact solution.
-    ExactSolution exact_solution;
 
     // Current time.
     double time;
