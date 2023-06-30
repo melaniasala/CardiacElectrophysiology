@@ -43,7 +43,7 @@ public:
     static constexpr unsigned int dim_ionic = 3;
 
     // Diffusion coefficient.
-    static constexpr double D = 1.171 * std::pow(10, -3); //+-0.221 cm^2/s
+    static constexpr double D = 1.171 * std::pow(10, -4); //+-0.221 cm^2/s
 
     // Functions. ///////////////////////////////////////////////////////////////
 
@@ -80,26 +80,26 @@ public:
         value(const Point<dim> &p,
               const unsigned int /*component*/ = 0) const override
         {
-            //  const std::vector<Point<dim>> locations = {Point<dim>(0.0,0.0,0.0), Point<dim>(0.007,0.02,0.003)};
-            // // if (p.norm()< 2e-4)
-            // //      cout<< "Point: " << p <<"Norm:" << p.norm() <<std::endl
-            // if (get_time() < (ini_time + duration))
-            // {
-            //     for (const auto &location : locations)
-            //     {
-            //         if (p.distance(location) < 1e-3)
-            //             return val;
-            //     }
-            // }
-
-            // return 0.0;
-
-            const Point<dim> location = Point<dim>(0.0,0.0,0.0);
+             const std::vector<Point<dim>> locations = {Point<dim>(0.0,0.0,0.0), Point<dim>(0.007,0.02,0.003)};
             // if (p.norm()< 2e-4)
             //      cout<< "Point: " << p <<"Norm:" << p.norm() <<std::endl
-            if (p.distance(location) < 1e-3 && get_time() < (ini_time + duration))
-                return val;
+            if (get_time() < (ini_time + duration))
+            {
+                for (const auto &location : locations)
+                {
+                    if (p.distance(location) < 5e-3)
+                        return val;
+                }
+            }
+
             return 0.0;
+
+            // const Point<dim> location = Point<dim>(0.0,0.0,0.0);
+            // // if (p.norm()< 2e-4)
+            // //      cout<< "Point: " << p <<"Norm:" << p.norm() <<std::endl
+            // if (p.distance(location) < 1e-3 && get_time() < (ini_time + duration))
+            //     return val;
+            // return 0.0;
         
             //return 1;
         }

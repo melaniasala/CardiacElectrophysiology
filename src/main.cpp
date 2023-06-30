@@ -9,7 +9,7 @@ main(int argc, char *argv[])
   const unsigned int N      = 19;
   const unsigned int degree = 1;
 
-  const double T      = 0.02085;
+  const double T      = 0.1;
   const double deltat = 0.0005;
   const std::string tissue_type = "epicardium"; // da terminale (?)
 
