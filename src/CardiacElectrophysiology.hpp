@@ -43,7 +43,7 @@ public:
     static constexpr unsigned int dim_ionic = 3;
 
     // Diffusion coefficient.
-    static constexpr double D = 1.171; //+-0.221 cm^2/s
+    static constexpr double D = 1.171 * std::pow(10, -3); //+-0.221 cm^2/s
 
     // Functions. ///////////////////////////////////////////////////////////////
 
@@ -74,23 +74,41 @@ public:
     class ForcingTerm : public Function<dim>
     {
     public:
-        ForcingTerm(const double &ini_time_):ini_time(ini_time_),source(0,0,0){}
+        ForcingTerm(const double &ini_time_):ini_time(ini_time_) {}
 
         virtual double
         value(const Point<dim> &p,
               const unsigned int /*component*/ = 0) const override
         {
+            //  const std::vector<Point<dim>> locations = {Point<dim>(0.0,0.0,0.0), Point<dim>(0.007,0.02,0.003)};
+            // // if (p.norm()< 2e-4)
+            // //      cout<< "Point: " << p <<"Norm:" << p.norm() <<std::endl
+            // if (get_time() < (ini_time + duration))
+            // {
+            //     for (const auto &location : locations)
+            //     {
+            //         if (p.distance(location) < 1e-3)
+            //             return val;
+            //     }
+            // }
+
+            // return 0.0;
+
+            const Point<dim> location = Point<dim>(0.0,0.0,0.0);
             // if (p.norm()< 2e-4)
-            //      cout<< "Point: " << p <<"Norm:" << p.norm() <<std::endl;
-            return (p.norm()<radius && get_time()<(ini_time+duration))*val; // integral should be added?
+            //      cout<< "Point: " << p <<"Norm:" << p.norm() <<std::endl
+            if (p.distance(location) < 1e-3 && get_time() < (ini_time + duration))
+                return val;
+            return 0.0;
+        
             //return 1;
         }
         // TODO tune values here
-        double radius = 2e-4;
+        // double radius = 2e-4;
         double duration = 1e-2;
         double ini_time;
-        double val = 1e3;
-        Point<dim> source;
+        double val = 10;
+        //Point<dim> source;
     
     };
 
@@ -105,7 +123,7 @@ public:
         {
             // if (get_time()==ini_time) // non serve tanto u0 solo iniziale non c'è time
             //     cout << "PUNTO FORZANTE TROVATO" << std::endl;
-            return 0;//(p==source)*val;
+            return 0.0;//(p==source)*val;
         }
 
     private:

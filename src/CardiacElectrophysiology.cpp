@@ -15,7 +15,7 @@ BuenoOrovioModel::setup()
     grid_in.attach_triangulation(mesh_serial);
 
     // TODO: genetate mesh
-    const std::string mesh_file_name = "./mesh/rectangular_slab_small.msh"; // "./mesh/rectangular_slab_big.msh"
+    const std::string mesh_file_name = "../mesh/rectangular_slab_small.msh"; // "./mesh/rectangular_slab_big.msh"
       //"../mesh/mesh-cube-" + std::to_string(N + 1) + ".msh";
 
     std::ifstream grid_in_file(mesh_file_name);
