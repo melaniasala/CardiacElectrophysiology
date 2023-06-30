@@ -43,7 +43,7 @@ public:
     static constexpr unsigned int dim_ionic = 3;
 
     // Diffusion coefficient.
-    static constexpr double D = 1.171; //+-0.221
+    static constexpr double D = 1.171; //+-0.221 cm^2/s
 
     // Functions. ///////////////////////////////////////////////////////////////
 
@@ -74,14 +74,23 @@ public:
     class ForcingTerm : public Function<dim>
     {
     public:
+        ForcingTerm(const double &ini_time_):ini_time(ini_time_),source(0,0,0){}
+
         virtual double
-        value(const Point<dim> &/*p*/,
+        value(const Point<dim> &p,
               const unsigned int /*component*/ = 0) const override
         {
-
-            return 0;
+            // if (p.norm()< 2e-4)
+            //      cout<< "Point: " << p <<"Norm:" << p.norm() <<std::endl;
+            return (p.norm()<radius && get_time()<(ini_time+duration))*val; // integral should be added?
+            //return 1;
         }
-        
+        // TODO tune values here
+        double radius = 2e-4;
+        double duration = 1e-2;
+        double ini_time;
+        double val = 1e3;
+        Point<dim> source;
     
     };
 
@@ -89,20 +98,18 @@ public:
     class FunctionU0 : public Function<dim>
     {
     public:
-        FunctionU0(const double &ini_time_):ini_time(ini_time_),source(0,0,0){}
-
+        FunctionU0():source(0,0,0){}
         virtual double
-        value(const Point<dim> &p,
+        value(const Point<dim> &/*p*/,
               const unsigned int /*component*/ = 0) const override
         {
             // if (get_time()==ini_time) // non serve tanto u0 solo iniziale non c'è time
             //     cout << "PUNTO FORZANTE TROVATO" << std::endl;
-            return (p==source)*val;
+            return 0;//(p==source)*val;
         }
 
     private:
         // TODO tune values here
-        double ini_time;
         double val = 1e2;
         Point<dim> source;
     };
@@ -188,7 +195,8 @@ public:
         : mpi_size(Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD))
         , mpi_rank(Utilities::MPI::this_mpi_process(MPI_COMM_WORLD))
         , pcout(std::cout, mpi_rank == 0)
-        , u0(deltat_)
+        // , u0(deltat_)
+        , j_app(deltat_)
         , T(T_)
         , N(N_)
         , r(r_)

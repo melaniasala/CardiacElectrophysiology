@@ -1,5 +1,7 @@
 #include "CardiacElectrophysiology.hpp"
 
+#define PRINT_ON true
+
 void
 BuenoOrovioModel::setup()
 {
@@ -13,7 +15,7 @@ BuenoOrovioModel::setup()
     grid_in.attach_triangulation(mesh_serial);
 
     // TODO: genetate mesh
-    const std::string mesh_file_name = "./mesh/rectangular_slab.msh"; // "./mesh/rectangular_slab_big.msh"
+    const std::string mesh_file_name = "./mesh/rectangular_slab_small.msh"; // "./mesh/rectangular_slab_big.msh"
       //"../mesh/mesh-cube-" + std::to_string(N + 1) + ".msh";
 
     std::ifstream grid_in_file(mesh_file_name);
@@ -274,10 +276,11 @@ BuenoOrovioModel::assemble_rhs(const double &time)
           solve_ionic_system(ionicvars_old_loc[q], solution_old_loc[q], ionicvars_loc[q]);
           
           // Compute Jion(u_n) (depends on ionic variables, and on solution_loc[q] -> u_n)
-           const double j_ion_loc = j_ion.value(ionicvars_loc[q] /* z_n+1 */, solution_old_loc[q] /* u_n */); 
+          const double j_ion_loc = j_ion.value(ionicvars_loc[q] /* z_n+1 */, solution_old_loc[q] /* u_n */); 
 
           // Compute Japp(u_n+1)
-            const double j_app_loc = j_app.value(fe_values.quadrature_point(q));
+          j_app.set_time(time);
+          const double j_app_loc = j_app.value(fe_values.quadrature_point(q));
 
           for (unsigned int i = 0; i < dofs_per_cell; ++i)
             {
@@ -306,8 +309,8 @@ BuenoOrovioModel::solve_time_step()
     lhs_matrix, TrilinosWrappers::PreconditionSSOR::AdditionalData(1.0));
 
   solver.solve(lhs_matrix, solution_owned, system_rhs, preconditioner);
-  pcout << "   " << solver_control.last_step() << " GMRES iterations"
-        << std::endl;
+  if (PRINT_ON)
+    pcout << "   " << solver_control.last_step() << " GMRES iterations" << std::endl;
 
   solution = solution_owned;
 }
@@ -389,8 +392,8 @@ BuenoOrovioModel::solve()
       time += deltat;
       ++time_step;
 
-      pcout << "n = " << std::setw(3) << time_step << ", t = " << std::setw(5)
-            << time << ":" << std::flush;
+      if (PRINT_ON)
+        pcout << "n = " << std::setw(3) << time_step << ", t = " << std::setw(5) << time << ":" << std::flush;
 
       assemble_rhs(time);
       solve_time_step();
