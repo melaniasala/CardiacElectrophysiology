@@ -31,6 +31,7 @@
 using namespace dealii;
 
 #define H(x, c) (x >= c)
+#define isCloseToAnyLocation(p, locations, distance) std::any_of(locations.begin(), locations.end(), [&](const Point<dim>& location) { return p.distance(location) < distance; })
 
 // Class representing the Bueno-Orovio model of the heart
 class BuenoOrovioModel
@@ -63,20 +64,30 @@ public:
     class ForcingTerm : public Function<dim>
     {
     public:
-        ForcingTerm(const double &ini_time_):ini_time(ini_time_) {}
+        ForcingTerm(const double &ini_time_, const short int &mesh_type_):
+            ini_time(ini_time_)
+        {
+            switch (mesh_type_)
+            {
+            case 0: // small slab
+                locations = {Point<dim>(0.0,0.0,0.0), Point<dim>(0.007,0.02,0.003)};
+                break;
+            
+            default:
+                locations = {Point<dim>(0.0,0.0,0.0)};
+                break;
+            }
+        };
 
         virtual double
         value(const Point<dim> &p,
               const unsigned int /*component*/ = 0) const override
         {
-            const std::vector<Point<dim>> locations = {Point<dim>(0.0,0.0,0.0), Point<dim>(0.007,0.02,0.003)};
             
             if (get_time() < (ini_time + duration))
             {
-                for (const auto &location : locations)
-                {
-                    if (p.distance(location) < distance)
-                        return val;
+                if (isCloseToAnyLocation(p, locations, distance)){
+                    return val;
                 }
             }
 
@@ -87,7 +98,7 @@ public:
         double duration = 1;
         double ini_time;
         double val = 10;
-        //Point<dim> source;
+        std::vector<Point<dim>> locations;
     
     };
 
@@ -156,7 +167,7 @@ public:
         , mpi_rank(Utilities::MPI::this_mpi_process(MPI_COMM_WORLD))
         , pcout(std::cout, mpi_rank == 0)
         // , u0(deltat_)
-        , j_app(deltat_)
+        , j_app(deltat_,mesh_type_)
         , T(T_)
         , r(r_)
         , deltat(deltat_)
