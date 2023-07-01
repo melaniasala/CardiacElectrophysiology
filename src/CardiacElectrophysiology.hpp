@@ -43,7 +43,7 @@ public:
     static constexpr unsigned int dim_ionic = 3;
 
     // Diffusion coefficient.
-    static constexpr double D = 1.171 * std::pow(10, -4); //+-0.221 cm^2/s
+    static constexpr double D = 1.171e-3; //+-0.221 cm^2/s
 
     // Functions. ///////////////////////////////////////////////////////////////
 
@@ -59,17 +59,6 @@ public:
         }
     };
 
-    // class Heaviside : public Function<dim>
-    // {
-    // public:
-    //     virtual double value(const Point<dim> &p, const unsigned int /*component*/ = 0) const override
-    //     {
-    //         u(p);
-    //         return std::sin(5 * M_PI * get_time()) * std::sin(2 * M_PI * p[0]) *
-    //                std::sin(3 * M_PI * p[0]) * std::sin(4 * M_PI * p[2]);
-    //     }
-    // };
-
     // Function for the forcing term (applied current).
     class ForcingTerm : public Function<dim>
     {
@@ -80,32 +69,22 @@ public:
         value(const Point<dim> &p,
               const unsigned int /*component*/ = 0) const override
         {
-             const std::vector<Point<dim>> locations = {Point<dim>(0.0,0.0,0.0), Point<dim>(0.007,0.02,0.003)};
-            // if (p.norm()< 2e-4)
-            //      cout<< "Point: " << p <<"Norm:" << p.norm() <<std::endl
+            const std::vector<Point<dim>> locations = {Point<dim>(0.0,0.0,0.0), Point<dim>(0.007,0.02,0.003)};
+            
             if (get_time() < (ini_time + duration))
             {
                 for (const auto &location : locations)
                 {
-                    if (p.distance(location) < 5e-3)
+                    if (p.distance(location) < distance)
                         return val;
                 }
             }
 
             return 0.0;
-
-            // const Point<dim> location = Point<dim>(0.0,0.0,0.0);
-            // // if (p.norm()< 2e-4)
-            // //      cout<< "Point: " << p <<"Norm:" << p.norm() <<std::endl
-            // if (p.distance(location) < 1e-3 && get_time() < (ini_time + duration))
-            //     return val;
-            // return 0.0;
-        
-            //return 1;
         }
         // TODO tune values here
-        // double radius = 2e-4;
-        double duration = 1e-2;
+        double distance = 5e-3;
+        double duration = 1;
         double ini_time;
         double val = 10;
         //Point<dim> source;
@@ -145,43 +124,6 @@ public:
         }
     };
 
-    // // Vector valued function corresponding to the gating variable system.
-    // class IonicSystem
-    // {
-    // public:
-    //     IonicSystem(double u_) {
-    //         this.u = u_;
-    //     }
-
-    //     // This method compute the values of the ionic variables for the current quadrature node, taking as
-    //     // input the reference to the gating variables' vector and updates z_new with the computed values.
-    //     void
-    //     value(const std::vector<double> &z_old, std::vector<double> &z_new) const
-    //     {
-    //         z_new[0] = (z_old[0] * tau_v_min + (1 - H(u, tissue_parameters.theta_v)) * deltat * v_inf) 
-    //                     * tissue_parameters.tau_v_plus 
-    //                     / (tau_v_min * tissue_parameters.tau_v_plus + deltat * tissue_parameters.tau_v_plus + H(u, tissue_parameters.theta_v) * deltat * (tau_v_min - tissue_parameters.tau_v_plus));
-    //         z_new[1] = (z_old[1] * tau_w_min + (1 - H(u, tissue_parameters.theta_w)) * deltat * w_inf) 
-    //                     * tau_w_plus 
-    //                     / (tau_w_min * tissue_parameters.tau_w_plus + deltat * tissue_parameters.tau_w_plus + H(u, tissue_parameters.theta_w) * deltat * (tau_w_min - tissue_parameters.tau_w_plus));
-    //         z_new[2] = (z_old[2] * tau_s + 1 + std::tanh(tissue_parameters.k_s * (u - tissue_parameters.u_s))) 
-    //                     / (2 * (tau_s + 1))
-    //     }
-
-    // protected:
-    //     // Here some constant for computing the system.
-    //     // maybe the H??
-
-    //     constexpr double tau_v_min = (1 - H(u, tissue_parameters.theta_v_min))* tissue_parameters.tau_v1_min + H(u, tissue_parameters.theta_v_min)* tissue_parameters.tau_v2_min;
-    //     constexpr double tau_w_min =  tissue_parameters.tau_w1_min + (tissue_parameters.tau_w2_min - tissue_parameters.tau_w1_min)*(1 + std::tanh(tissue_parameters.k_w_min *(u - tissue_parameters.u_w_min)))/ 2.;
-    //     constexpr double tau_s = (1 - H(u, tissue_parameters.theta_w)) * tissue_parameters.tau_s1 + H(u, tissue_parameters.theta_w)* tissue_parameters.tau_s2;
-    //     constexpr double v_inf = 1 - H(u, tissue_parameters.theta_v_min);
-    //     constexpr double w_inf = (1 - H(u, tissue_parameters.theta_o))*(1 - (u / tissue_parameters.tau_w_inf))* tissue_parameters.w_inf_star;
-
-    // private:
-    //     double u;
-    // };
-
     class FunctionJion
     {
     public:
@@ -205,23 +147,23 @@ public:
 
     // Constructor. We provide the final time, time step Delta t and theta method
     // parameter as constructor arguments.
-    BuenoOrovioModel(const unsigned int &N_,
-                const unsigned int &r_,
+    BuenoOrovioModel(const unsigned int &r_,
                 const double &T_,
                 const double &deltat_,
-                const std::string &tissue_type_)
+                const short int &tissue_type_,
+                const short int &mesh_type_)
         : mpi_size(Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD))
         , mpi_rank(Utilities::MPI::this_mpi_process(MPI_COMM_WORLD))
         , pcout(std::cout, mpi_rank == 0)
         // , u0(deltat_)
         , j_app(deltat_)
         , T(T_)
-        , N(N_)
         , r(r_)
         , deltat(deltat_)
         , tissue_parameters(tissue_type_)
         , mesh(MPI_COMM_WORLD)
         , j_ion(*this)
+        , mesh_type(mesh_type_)
     {}
 
     // Initialization.
@@ -235,9 +177,10 @@ protected:
     class TissueParameters
     {
     public:
-        TissueParameters(const std::string &tissue_type_){
-            if (!tissue_type_.compare("epicardium"))
+        TissueParameters(const short int &tissue_type_){
+            switch (tissue_type_)
             {
+            case 0: // epicardium
                 u_0 = 0.0;
                 u_u = 1.55;
                 theta_v = 0.3;
@@ -266,9 +209,8 @@ protected:
                 tau_si = 1.8875e-3;
                 tau_w_inf = 0.07;
                 w_inf_star = 0.9;
-            }
-            else if(!tissue_type_.compare("endocardium"))
-            {
+                break;
+            case 1: // endocardium
                 u_0 = 0.0;
                 u_u = 1.56;
                 theta_v = 0.3;
@@ -297,8 +239,8 @@ protected:
                 tau_si = 2.9013e-3;
                 tau_w_inf = 0.0273;
                 w_inf_star = 0.7;
-            }
-            else if(!tissue_type_.compare("myocardium")){
+                break;
+            case 2:
                 u_0 = 0.0;
                 u_u = 1.61;
                 theta_v = 0.3;
@@ -327,9 +269,10 @@ protected:
                 tau_si = 3.3849e-3;
                 tau_w_inf = 0.01;
                 w_inf_star = 0.;
-            }
-            else {
+                break;
+            default:
                 throw std::runtime_error("Unknown tissue type: " + tissue_type_);
+                break;
             }
         }
         double u_0;
@@ -410,7 +353,7 @@ protected:
     // Discretization. ///////////////////////////////////////////////////////////
 
     // Mesh refinement.
-    const unsigned int N;
+    // const unsigned int N;
 
     // Polynomial degree.
     const unsigned int r;
@@ -472,4 +415,7 @@ protected:
 
     // Ionic current.
     FunctionJion j_ion;
+
+    // Mesh type:
+    const short int mesh_type;
 };

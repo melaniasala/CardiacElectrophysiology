@@ -7,25 +7,33 @@ BuenoOrovioModel::setup()
 {
   // Create the mesh.
   {
+    
     pcout << "Initializing the mesh" << std::endl;
 
     Triangulation<dim> mesh_serial;
 
+    // fill serial triangulation (e.g., read external mesh)
     GridIn<dim> grid_in;
     grid_in.attach_triangulation(mesh_serial);
 
-    // TODO: genetate mesh
-    const std::string mesh_file_name = "../mesh/rectangular_slab_small.msh"; // "./mesh/rectangular_slab_big.msh"
-      //"../mesh/mesh-cube-" + std::to_string(N + 1) + ".msh";
+    std::string mesh_file_name = "./mesh/rectangular_slab_small.msh"; // default
 
+    if (mesh_type==1)
+      mesh_file_name = "./mesh/ellipsoid3D_thin.msh";
+    
     std::ifstream grid_in_file(mesh_file_name);
     grid_in.read_msh(grid_in_file);
 
+    // partition serial triangulation
     GridTools::partition_triangulation(mpi_size, mesh_serial);
+
+    // create description
     const auto construction_data = TriangulationDescription::Utilities::
       create_description_from_triangulation(mesh_serial, MPI_COMM_WORLD);
+    
+    // create triangulation
     mesh.create_triangulation(construction_data);
-
+    
     pcout << "  Number of elements = " << mesh.n_global_active_cells()
           << std::endl;
   }
