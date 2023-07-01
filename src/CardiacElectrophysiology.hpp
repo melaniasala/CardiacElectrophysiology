@@ -72,7 +72,13 @@ public:
             case 0: // small slab
                 locations = {Point<dim>(0.0,0.0,0.0), Point<dim>(0.007,0.02,0.003)};
                 break;
-            
+            case 1: // ellipsoid3D_thin
+                locations = {Point<dim>(-15.7104,-26.6681,-31.4261),Point<dim>(-15.7104,-26.6681,31.4261)};
+                distance = 5;
+                val = 10;
+                duration = 1;
+                val = 1e2;
+                break;
             default:
                 locations = {Point<dim>(0.0,0.0,0.0)};
                 break;
