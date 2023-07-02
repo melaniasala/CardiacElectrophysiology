@@ -44,7 +44,7 @@ public:
     static constexpr unsigned int dim_ionic = 3;
 
     // Diffusion coefficient.
-    static constexpr double D = 1.171e-3; //+-0.221 cm^2/s
+    static constexpr double D = 1.171e-4; //+-0.221 m^2/s or 1.171e+2 mm^2/s
 
     // Functions. ///////////////////////////////////////////////////////////////
 
