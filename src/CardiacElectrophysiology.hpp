@@ -44,7 +44,7 @@ public:
     static constexpr unsigned int dim_ionic = 3;
 
     // Diffusion coefficient.
-    static constexpr double D = 1.171e-4; //+-0.221 m^2/s or 1.171e+2 mm^2/s
+    static constexpr double D = 1.171e2; //1.171+-0.221 cm^2/s
 
     // Functions. ///////////////////////////////////////////////////////////////
 
@@ -65,18 +65,21 @@ public:
     {
     public:
         ForcingTerm(const double &ini_time_, const short int &mesh_type_):
-            ini_time(ini_time_)
+            ini_time(ini_time_),
+            mesh_type(mesh_type_)
         {
             switch (mesh_type_)
             {
             case 0: // small slab
-                locations = {Point<dim>(0.0,0.0,0.0), Point<dim>(0.007,0.02,0.003)};
+                // 2 ms at 50 000 mA cm −3
+                // locations = {};
+                duration = 2e-3; // 2 ms
+                val = 5e1; //uA/mm^3 // 5e4 uA/cm^3
                 break;
             case 1: // ellipsoid3D_thin
                 locations = {Point<dim>(-15.7104,-26.6681,-31.4261),Point<dim>(-15.7104,-26.6681,31.4261)};
-                distance = 5;
-                val = 10;
-                duration = 1;
+                distance = 5; // mm
+                duration = 2e-3;
                 val = 1e2;
                 break;
             default:
@@ -89,13 +92,23 @@ public:
         value(const Point<dim> &p,
               const unsigned int /*component*/ = 0) const override
         {
-            
             if (get_time() < (ini_time + duration))
-            {
-                if (isCloseToAnyLocation(p, locations, distance)){
-                    return val;
+                switch (mesh_type)
+                {
+                case 0: // slab
+                    //The stimulus current was delivered to a volume of 1.5 × 1.5 × 1.5 mm located at one corner of the slab
+                    if (p[0]<=1.5 && p[1]<=1.5 && p[2]<=1.5)
+                        return val;
+                    break;
+                case 1: // ellipsoid
+                    if (isCloseToAnyLocation(p, locations, distance)){
+                        return val;
+                    }
+                    break;
+                default:
+                    break;
                 }
-            }
+                
 
             return 0.0;
         }
@@ -105,7 +118,7 @@ public:
         double ini_time;
         double val = 10;
         std::vector<Point<dim>> locations;
-    
+        const short int mesh_type;    
     };
 
     // Function for the initial condition of u.
@@ -191,7 +204,7 @@ public:
 
 protected:
     // Model's parameters: //////////////
-    class TissueParameters
+    class TissueParameters // in seconds
     {
     public:
         TissueParameters(const short int &tissue_type_){

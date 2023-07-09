@@ -16,10 +16,10 @@ BuenoOrovioModel::setup()
     GridIn<dim> grid_in;
     grid_in.attach_triangulation(mesh_serial);
 
-    std::string mesh_file_name = "./mesh/rectangular_slab_small.msh"; // default
+    std::string mesh_file_name = "../mesh/rectangular_slab_big.msh"; // default
 
     if (mesh_type==1)
-      mesh_file_name = "./mesh/ellipsoid3D_thin.msh";
+      mesh_file_name = "../mesh/ellipsoid3D_thin.msh";
     
     std::ifstream grid_in_file(mesh_file_name);
     grid_in.read_msh(grid_in_file);
