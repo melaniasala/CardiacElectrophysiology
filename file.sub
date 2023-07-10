@@ -1,0 +1,18 @@
+#!/bin/bash
+
+#PBS -S /bin/bash
+#PBS -l nodes=1:ppn=4,walltime=1:00:00 -q gigat
+#PBS -N CardiacElectrophysiology
+
+cd ${PBS_O_WORKDIR}
+
+if ! grep -qxF "module load dealii" ../.bashrc; then
+    echo "export mkPrefix=/u/sw" >> ../.bashrc
+    echo "source $mkPrefix/etc/profile" >> ../.bashrc
+    echo "module load gcc-glibc/11" >> ../.bashrc
+    echo "module load dealii" >> ../.bashrc
+fi
+source ../.bashrc
+
+cd ./build
+mpirun -n 4 ./main -mt 0 -dT 0.0005 -T 0.1 > output_file.txt 2>&1
