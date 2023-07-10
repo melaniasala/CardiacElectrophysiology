@@ -9,8 +9,8 @@ main(int argc, char *argv[])
   // default values
   //const unsigned int N      = 19;
   const unsigned int degree = 1;
-  double T      = 0.1;
-  double deltat = 0.0005;
+  double T      = 4e-3;
+  double deltat = 5e-5; // 0.05 ms
   short int tissue_type = 0; // epicardium
   short int mesh_type = 0; // slab small
 
