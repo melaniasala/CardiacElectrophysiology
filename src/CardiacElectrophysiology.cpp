@@ -16,7 +16,7 @@ BuenoOrovioModel::setup()
     GridIn<dim> grid_in;
     grid_in.attach_triangulation(mesh_serial);
 
-    std::string mesh_file_name = "../mesh/rectangular_slab_big.msh"; // default
+    std::string mesh_file_name = "../mesh/rectangular_slab_XL.msh"; // default
 
     if (mesh_type==1)
       mesh_file_name = "../mesh/ellipsoid3D_thin.msh";
@@ -309,7 +309,7 @@ BuenoOrovioModel::assemble_rhs(const double &time)
 void
 BuenoOrovioModel::solve_time_step()
 {
-  SolverControl solver_control(1000, 1e-6 * system_rhs.l2_norm());
+  SolverControl solver_control(10000, 1e-12 /* * system_rhs.l2_norm() */);
 
   SolverGMRES<TrilinosWrappers::MPI::Vector> solver(solver_control);
   TrilinosWrappers::PreconditionSSOR      preconditioner;
